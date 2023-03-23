@@ -1,5 +1,8 @@
 use core::panic;
-use std::ops::Add;
+use std::{ops::Add, slice::Iter};
+use crate::bus::Bus;
+
+use bitflags::bitflags;
 
 pub fn some_function() -> i32 {
     // this is just an example function for testing
@@ -8,7 +11,9 @@ pub fn some_function() -> i32 {
 
 pub enum Instruction {
     ADC,
-
+    LDA,
+    TAX,
+    INX,
 }
 pub enum AddressingMode {
     Implicit,           // implicit
@@ -29,15 +34,35 @@ pub enum AddressingMode {
 
 // NOTE: all cpu opcodes are a single u8 of the form AAABBBCC in binary, BBB defines the addressing mode
 
+bitflags! {
+    struct CpuStatus: u8 {
+        const CARRY =       0b0000_0001;
+        const ZERO =        0b0000_0010;
+        const INT_DISABLE = 0b0000_0100;
+        const DECIMAL =     0b0000_1000;
+        const BRK =         0b0001_0000;
+        const ALWAYS =      0b0010_0000;
+        const OVERFLOW =    0b0100_0000;
+        const NEGATIVE =    0b1000_0000;
+    }
+}
+
+
+
+
+
 pub struct CPU {
     // General purpose registers
     pub reg_a: u8,
     pub reg_x: u8,
     pub reg_y: u8,
     // Special purpose registers
-    status: u8,
+    status: CpuStatus,
     stack_pointer: u16,
     program_counter: u8,
+
+    // Bus
+    bus: Bus,
 }
 
 const ADDRESSING_MODE_MASK: u8 = 0b0001_1100;
@@ -50,9 +75,10 @@ impl CPU {
             reg_a: 0,
             reg_x: 0,
             reg_y: 0,
-            status: 0,
+            status: CpuStatus::ALWAYS,
             stack_pointer: 0,      // probably needs to initialize to something else
             program_counter: 0,      // same here
+            bus: Bus::new(),
         }
     }
 
@@ -87,17 +113,43 @@ impl CPU {
     }
 
 
-    fn decode_arg(&self, arg: u8, mode: &AddressingMode) -> u16 {
-        /// Decodes an argument byte and the addressing mode into the proper value
+    fn read_arg(&mut self, mode: &AddressingMode, program: &Vec<u8>) -> Option<u8> {
+        /// Based on the addressing mode, read `n` number of argument bytes from the program and process it into a parameter
+        /// to be used by some instruction
 
         match mode {
-            AddressingMode::Implicit => 0,
-            AddressingMode::Accumulator => self.reg_a as u16,
-            AddressingMode::Immediate => arg as u16,
-
-            AddressingMode::IndirectJump => panic!("Not implemented"),
+            AddressingMode::Implicit => None,
+            AddressingMode::Accumulator => Some(self.reg_a),
+            AddressingMode::Immediate => {
+                let byte = *program.get(self.program_counter as usize)?;
+                self.program_counter += 1;
+                Some(byte)
+            },
+            AddressingMode::IndirectJump => {
+                // first read two bytes
+                let lsb = *program.get(self.program_counter as usize)? as u16;
+                let msb = *program.get((self.program_counter + 1) as usize)? as u16;
+                self.program_counter += 2;
+                // translate it into a u16 address
+                let mem_addr = (msb << 8) + lsb;
+                // read the two bytes from memory and form it into a mem addr
+                let lsb = self.bus.read(mem_addr) as u16;
+                let msb = self.bus.read(mem_addr + 1) as u16;
+                let mem_addr = (msb << 8) + lsb;
+                // now read from memory
+                Some(self.bus.read(mem_addr))
+            },
             AddressingMode::Relative => panic!("Not implemented"),
-            AddressingMode::Absolute => arg as u16,
+            AddressingMode::Absolute => {
+                // first read two bytes
+                let lsb = *program.get(self.program_counter as usize)? as u16;
+                let msb = *program.get((self.program_counter + 1) as usize)? as u16;
+                self.program_counter += 2;
+                // translate it into a u16 address
+                let mem_addr = (msb << 8) + lsb;
+                // read it directly from memory
+                Some(self.bus.read(mem_addr))
+            },
             AddressingMode::AbsoluteJump => panic!("Not implemeneted"),
             AddressingMode::ZeroPage => panic!("Not implemented"),
             AddressingMode::ZeroPageIndexX => panic!("Not implemented"),
@@ -106,65 +158,112 @@ impl CPU {
             AddressingMode::AbsoluteIndexY => panic!("Not implemented"),
             AddressingMode::IndirectX => panic!("Not implemented"),
             AddressingMode::IndirectY => panic!("Not implemented"),
-        }
-    }
-
-
-    pub fn run_program(&mut self, program: Vec<u8>) {
-        // This function will take in a program, and execute it step by step, the program is read back to front
-
-        self.program_counter = 0;
-        let mut program_iter = program.iter();
-        loop {
-            // 1. Read opcode and decode it to an instruction
-            let (instruction, addressing_mode) = if let Some(opcode_raw) = program_iter.next() {
-                self.decode_opcode(*opcode_raw)
-            } else {
-                break
-            };
-
-            
-            // 2. Read argument and decode
-            let parameter = if let Some(arg) = program_iter.next() {
-                self.decode_arg(*arg, &addressing_mode)
-            } else {
-                break;
-            };
-
-            // 3. Read an extra byte if in Absolute mode
-
-            let parameter = match addressing_mode {
-                AddressingMode::Absolute | AddressingMode::AbsoluteIndexX | AddressingMode::AbsoluteIndexY => {
-                    match program_iter.next() {
-                        Some(arg) => (parameter << 8) + (*arg as u16),
-                        None => break
-                    }
-                }
-                _ => parameter
-            };
-            
-
-            // 4. Execute the instruction
-
-
-            break;
-        }
-    }
-
-
-    pub fn execute_instruction(&mut self, instruction: Instruction, parameter: u16) {
-        match instruction {
-            Instruction::ADC => {
-                
-            }
             _ => panic!("Not implemented")
         }
     }
 
 
-    pub fn execute_adc(&mut self, mode: AddressingMode) {
-        
+    pub fn run_program(&mut self, program: Vec<u8>) -> Result<(), String> { 
+        // This function will take in a program, and execute it step by step
+        // TODO: result is Result<()), String> right now, need to change to something more descriptive
 
-        // parameter.
+        self.program_counter = 0;
+        loop {
+            // 1. Read opcode and decode it to an instruction, always takes 1 cycle
+            let (instruction, addressing_mode) = if let Some(opcode_raw) = program.get(self.program_counter as usize) {
+                self.decode_opcode(*opcode_raw)
+            } else {
+                return Err("Didn't expect instruction".to_string());
+            };
+
+            // 2. Read some number of bytes depending on what the addressing mode is and decode the instruction parameter, may take 0-2 cycles
+            // Ref: http://www.6502.org/tutorials/6502opcodes.html
+            let parameter = self.read_arg(&addressing_mode, &program);
+
+            // 3. Execute the instruction
+            // self.execute_instruction(instruction, parameter);
+
+            // 4. Check if program is done, if done
+            if program.get(self.program_counter as usize) == None {
+                ()
+            }
+        }
     }
+
+
+    pub fn execute_instruction(&mut self, instruction: Instruction, parameter: u8) {
+        match instruction {
+            Instruction::ADC => self.adc(parameter),
+            Instruction::LDA => self.lda(parameter),
+            Instruction::TAX => self.tax(),
+            _ => panic!("Not implemented")
+        }
+    }
+
+    fn lda(&mut self, parameter: u8) {
+        self.reg_a = parameter
+    }
+
+    fn ldx(&mut self, parameter: u8) {
+        self.reg_x = parameter
+    }
+
+    fn ldy(&mut self, parameter: u8) {
+        self.reg_y = parameter
+    }
+
+    fn tax(&mut self) {
+        self.reg_x = self.reg_a
+    }
+
+    fn inx(&mut self) {
+        self.reg_x += 1
+    }
+
+    fn iny(&mut self) {
+        self.reg_y += 1;
+    }
+
+    fn adc(&mut self, parameter: u8) {
+        /// Currently, carrying_add is unstable, so casting to u16 and checking the bit is actually the simplest option
+        // let (output, carry) = self.reg_a.carrying_add(parameter, self.status.contains(CpuStatus::CARRY));
+
+        // Cast all relevant values to u16
+        let reg_a = self.reg_a as u16;
+        let val = parameter as u16;
+        let carry = self.status.contains(CpuStatus::CARRY) as u16;
+
+        // Add them together
+        let sum = reg_a + val + carry;
+
+        // Keep only least significant byte for result
+        let result = sum as u8;
+
+        // Check for carry, maybe refactorable?
+        if sum > 0xFF {
+            self.status.insert(CpuStatus::CARRY);
+        } else {
+            self.status.remove(CpuStatus::CARRY);
+        }
+
+
+        // Check for overflow, maybe refactorable?
+        if (parameter ^ result) & (self.reg_a ^ result) & 0b1000_0000 != 0 {
+            self.status.insert(CpuStatus::OVERFLOW);
+        } else {
+            self.status.remove(CpuStatus::OVERFLOW);
+        }
+
+        // TODO: set flags
+        // Set accumulator
+        self.reg_a = result;
+
+
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    
 }
