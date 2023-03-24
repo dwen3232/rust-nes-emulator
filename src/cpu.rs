@@ -1387,8 +1387,10 @@ impl CPU {
     }
 
     fn sbc(&mut self, parameter: u8) {
-
-    }
+        // Affects Flags: N V Z C
+        // Can just use ADC internally
+        self.adc(parameter ^ 0b1111_1111) // toggle every bit and pass to adc
+    }   
 
     fn sta(&mut self, address: u16) {
         // Affected Flags: None
