@@ -586,7 +586,7 @@ impl CPU {
             self.execute_instruction(instruction, parameter);
 
             // 4. Check if program is done, if done return TODO turn to check brk flag
-            if program.get(self.program_counter as usize) == None {
+            if self.read_byte(&program) == None {
                 self.status.insert(CpuStatus::BRK);
                 ()
             }
@@ -595,12 +595,234 @@ impl CPU {
 
 
     pub fn execute_instruction(&mut self, instruction: Instruction, parameter: Option<Param>) {
+        // FUTURE WORK: can probably condense this more, but not really necessary
         match instruction {
-            // Instruction::ADC => self.adc(parameter),
+            Instruction::ADC => {
+                match parameter {
+                    Some(Param::Value(val)) => 
+                        self.adc(val),
+                    Some(Param::Address(mem_addr)) => 
+                        self.adc(self.bus.read(mem_addr)),
+                    _ => panic!("Invalid parameter"),
+                }
+            },
+            Instruction::AND => {
+                match parameter {
+                    Some(Param::Value(val)) => 
+                        self.and(val),
+                    Some(Param::Address(mem_addr)) => 
+                        self.and(self.bus.read(mem_addr)),
+                    _ => panic!("Invalid parameter"),
+                }
+            },
+            Instruction::ASL => {
+                match parameter {
+                    Some(Param::Value(val)) => 
+                        self.asl(val),
+                    Some(Param::Address(mem_addr)) => 
+                        self.asl(self.bus.read(mem_addr)),
+                    _ => panic!("Invalid parameter"),
+                }
+            },
+            Instruction::BIT => {
+                match parameter {
+                    Some(Param::Value(val)) => 
+                        self.bit(val),
+                    Some(Param::Address(mem_addr)) => 
+                        self.bit(self.bus.read(mem_addr)),
+                    _ => panic!("Invalid parameter"),
+                }
+            }
+            // Add branching here
+            Instruction::CMP => {
+                match parameter {
+                    Some(Param::Value(val)) => 
+                        self.cmp(val),
+                    Some(Param::Address(mem_addr)) => 
+                        self.cmp(self.bus.read(mem_addr)),
+                    _ => panic!("Invalid parameter"),
+                }
+            },
+            Instruction::CPX => {
+                match parameter {
+                    Some(Param::Value(val)) => 
+                        self.cpx(val),
+                    Some(Param::Address(mem_addr)) => 
+                        self.cpx(self.bus.read(mem_addr)),
+                    _ => panic!("Invalid parameter"),
+                }
+            },
+            Instruction::CPY => {
+                match parameter {
+                    Some(Param::Value(val)) => 
+                        self.cpy(val),
+                    Some(Param::Address(mem_addr)) => 
+                        self.cpy(self.bus.read(mem_addr)),
+                    _ => panic!("Invalid parameter"),
+                }
+            },
+            Instruction::DEC => {
+                match parameter {
+                    Some(Param::Address(mem_addr)) => 
+                        self.dec(mem_addr),
+                    _ => panic!("Invalid parameter"),
+                }
+            },
+            Instruction::EOR => {
+                match parameter {
+                    Some(Param::Value(val)) => 
+                        self.eor(val),
+                    Some(Param::Address(mem_addr)) => 
+                        self.eor(self.bus.read(mem_addr)),
+                    _ => panic!("Invalid parameter"),
+                }
+            },
+            Instruction::CLC => {
+                match parameter {
+                    None => 
+                        self.clc(),
+                    _ => panic!("Invalid parameter")
+                }
+            },
+            Instruction::SEC => {
+                match parameter {
+                    None => 
+                        self.sec(),
+                    _ => panic!("Invalid parameter")
+                }
+            },
+            Instruction::CLI => {
+                match parameter {
+                    None => 
+                        self.cli(),
+                    _ => panic!("Invalid parameter")
+                }
+            },
+            Instruction::SEI => {
+                match parameter {
+                    None => 
+                        self.sei(),
+                    _ => panic!("Invalid parameter")
+                }
+            },
+            Instruction::CLV => {
+                match parameter {
+                    None => 
+                        self.clv(),
+                    _ => panic!("Invalid parameter")
+                }
+            },
+            Instruction::CLD => {
+                match parameter {
+                    None => 
+                        self.cld(),
+                    _ => panic!("Invalid parameter")
+                }
+            },
+            Instruction::SED => {
+                match parameter {
+                    None => 
+                        self.sed(),
+                    _ => panic!("Invalid parameter")
+                }
+            },
+            Instruction::INC => {
+                match parameter {
+                    Some(Param::Address(mem_addr)) => 
+                        self.inc(mem_addr),
+                    _ => panic!("Invalid parameter"),
+                }
+            },
+            Instruction::JMP => {
+                match parameter {
+                    Some(Param::Address(mem_addr)) => 
+                        self.jmp(mem_addr),
+                    _ => panic!("Invalid parameter"),
+                }
+            },
+            Instruction::JSR => {
+                match parameter {
+                    Some(Param::Address(mem_addr)) => 
+                        self.jsr(mem_addr),
+                    _ => panic!("Invalid parameter"),
+                }
+            },
             Instruction::LDA => {
                 match parameter {
-                    Some(Param::Value(val)) => self.lda(val),
-                    Some(Param::Address(mem_addr)) => self.lda(self.bus.read(mem_addr)),
+                    Some(Param::Value(val)) => 
+                        self.lda(val),
+                    Some(Param::Address(mem_addr)) => 
+                        self.lda(self.bus.read(mem_addr)),
+                    _ => panic!("Invalid parameter"),
+                }
+            },
+            Instruction::LDX => {
+                match parameter {
+                    Some(Param::Value(val)) => 
+                        self.ldx(val),
+                    Some(Param::Address(mem_addr)) => 
+                        self.ldx(self.bus.read(mem_addr)),
+                    _ => panic!("Invalid parameter"),
+                }
+            },
+            Instruction::LDY => {
+                match parameter {
+                    Some(Param::Value(val)) => 
+                        self.ldy(val),
+                    Some(Param::Address(mem_addr)) => 
+                        self.ldy(self.bus.read(mem_addr)),
+                    _ => panic!("Invalid parameter"),
+                }
+            },
+            Instruction::LSR => {
+                match parameter {
+                    Some(Param::Value(val)) => 
+                        self.lsr(val),
+                    Some(Param::Address(mem_addr)) => 
+                        self.lsr(self.bus.read(mem_addr)),
+                    _ => panic!("Invalid parameter"),
+                }
+            },
+            Instruction::ORA => {
+                match parameter {
+                    Some(Param::Value(val)) => 
+                        self.ora(val),
+                    Some(Param::Address(mem_addr)) => 
+                        self.ora(self.bus.read(mem_addr)),
+                    _ => panic!("Invalid parameter"),
+                }
+            },
+            Instruction::ROL => {
+                match parameter {
+                    Some(Param::Value(val)) => 
+                        self.rol(val),
+                    Some(Param::Address(mem_addr)) => 
+                        self.rol(self.bus.read(mem_addr)),
+                    _ => panic!("Invalid parameter"),
+                }
+            },
+            Instruction::ROR => {
+                match parameter {
+                    Some(Param::Value(val)) => 
+                        self.ror(val),
+                    Some(Param::Address(mem_addr)) => 
+                        self.ror(self.bus.read(mem_addr)),
+                    _ => panic!("Invalid parameter"),
+                }
+            },
+            Instruction::RTI => {
+                match parameter {
+                    None => 
+                        self.rti(),
+                    _ => panic!("Invalid parameter"),
+                }
+            },
+            Instruction::SBC => {
+                match parameter {
+                    Some(Param::Value(val)) => 
+                        self.sbc(val),
+                    Some(Param::Address(mem_addr)) => 
+                        self.sbc(self.bus.read(mem_addr)),
                     _ => panic!("Invalid parameter"),
                 }
             },
@@ -611,9 +833,46 @@ impl CPU {
                     _ => panic!("Invalid parameter"),
                 }
             },
+            Instruction::STX => {
+                match parameter {
+                    Some(Param::Address(mem_addr)) => self.stx(mem_addr),
+                    _ => panic!("Invalid parameter"),
+                }
+            },
+            Instruction::STY => {
+                match parameter {
+                    Some(Param::Address(mem_addr)) => self.sty(mem_addr),
+                    _ => panic!("Invalid parameter"),
+                }
+            },
             _ => panic!("Not implemented"),
         }
     }
+
+    fn set_zero_flag(&mut self, result: u8) {
+        if result == 0 {
+            self.status.insert(CpuStatus::ZERO);
+        } else {
+            self.status.remove(CpuStatus::ZERO);
+        }
+    }
+
+    fn set_negative_flag(&mut self, result: u8) {
+        if result & 0b1000_0000 != 0 {
+            self.status.insert(CpuStatus::NEGATIVE);
+        } else {
+            self.status.remove(CpuStatus::NEGATIVE);
+        }
+    }
+
+    fn set_carry_flag(&mut self, result: u16) {
+        // Check carry flag
+        if result > 0xFF {
+            self.status.insert(CpuStatus::CARRY);
+        } else {
+            self.status.remove(CpuStatus::CARRY);
+        }
+    } 
 
     fn adc(&mut self, parameter: u8) {
         /// Affects Flags: N V Z C
@@ -629,118 +888,371 @@ impl CPU {
         // Keep only least significant byte for result
         let result = sum as u8;
 
-        // Check negative flag
-        if result & 0b1000_0000 != 0 {
-            self.status.insert(CpuStatus::NEGATIVE);
-        } else {
-            self.status.remove(CpuStatus::NEGATIVE);
-        }
-        // Check overflow flag
+        self.set_negative_flag(result);
+
+        // Check overflow flag; bit 7 must match for operands and result
         if (parameter ^ result) & (self.reg_a ^ result) & 0b1000_0000 != 0 {
             self.status.insert(CpuStatus::OVERFLOW);
         } else {
             self.status.remove(CpuStatus::OVERFLOW);
         }
-        // Check zero flag
-        if result == 0 {
-            self.status.insert(CpuStatus::ZERO);
-        } else {
-            self.status.remove(CpuStatus::ZERO);
-        }
-        // Check carry flag
-        if sum > 0xFF {
+
+        self.set_zero_flag(result);
+        self.set_carry_flag(sum);
+        
+        // Set accumulator
+        self.reg_a = result;
+    }
+
+    fn and(&mut self, parameter: u8) {
+        // Affects Flags: N Z
+        self.reg_a = self.reg_a & parameter;
+
+        self.set_negative_flag(self.reg_a);
+        self.set_zero_flag(self.reg_a);
+    }
+
+    fn asl(&mut self, parameter: u8) {
+        // Affects Flags: N Z C
+
+        let result = (parameter as u16) << 1;
+        self.reg_a = result as u8;
+
+        self.set_negative_flag(self.reg_a);
+        self.set_zero_flag(self.reg_a);
+        self.set_carry_flag(result);
+    }
+
+    fn bit(&mut self, parameter: u8) {
+        // Affects Flags: N V Z
+        let result = self.reg_a & parameter;
+
+        self.set_negative_flag(parameter); // neg if bit 7 in param is 1
+        
+        todo!("set overflow flag"); // overflow if bit 6 in param is 1
+
+        self.set_zero_flag(result);
+        
+    }
+
+    // Branching functions
+    fn bpl(&mut self, parameter: u8) {
+
+    }
+
+    fn bmi(&mut self, parameter: u8) {
+
+    }
+
+    fn bvc(&mut self, parameter: u8) {
+
+    }
+
+    fn bcc(&mut self, parameter: u8) {
+
+    }
+
+    fn bcs(&mut self, parameter: u8) {
+
+    }
+
+    fn bne(&mut self, parameter: u8) {
+
+    }
+
+    fn beq(&mut self, parameter: u8) {
+
+    }
+
+    fn brk(&mut self) {
+        // BRK causes a non-maskable interrupt and increments the program counter by one TODO figure out what this means
+        // Affects Flags: B
+        self.status.insert(CpuStatus::BRK);
+    }
+
+    fn cmp(&mut self, parameter: u8) {
+        // Affects Flags: N Z C
+        let result = self.reg_a.wrapping_sub(parameter);
+
+        self.set_negative_flag(result);
+        self.set_zero_flag(result);
+        // Special carry flag case
+        if self.reg_a > parameter {
             self.status.insert(CpuStatus::CARRY);
         } else {
             self.status.remove(CpuStatus::CARRY);
         }
-        // Set accumulator
-        self.reg_a = result;
     }
+
+    fn cpx(&mut self, parameter: u8) {
+        // Affects Flags: N Z C
+        let result = self.reg_x.wrapping_sub(parameter);
+
+        self.set_negative_flag(result);
+        self.set_zero_flag(result);
+        // Special carry flag case
+        if self.reg_x > parameter {
+            self.status.insert(CpuStatus::CARRY);
+        } else {
+            self.status.remove(CpuStatus::CARRY);
+        }
+    }
+
+    fn cpy(&mut self, parameter: u8) {
+        // Affects Flags: N Z C
+        let result = self.reg_y.wrapping_sub(parameter);
+
+        self.set_negative_flag(result);
+        self.set_zero_flag(result);
+        // Special carry flag case
+        if self.reg_y > parameter {
+            self.status.insert(CpuStatus::CARRY);
+        } else {
+            self.status.remove(CpuStatus::CARRY);
+        }
+    }
+
+    fn dec(&mut self, address: u16) {
+        // Affects Flags: N Z
+        let result = self.bus.read(address).wrapping_sub(1);
+        self.bus.write(address, result);
+
+        self.set_negative_flag(result);
+        self.set_zero_flag(result);
+    }
+
+    fn eor(&mut self, parameter: u8) {
+        // Affects Flags: N Z
+        self.reg_a = self.reg_a ^ parameter;
+
+        self.set_negative_flag(self.reg_a);
+        self.set_zero_flag(self.reg_a);
+    }
+
+    // flag instructions
+    fn clc(&mut self) {
+        // Clears carry flag
+        self.status.remove(CpuStatus::CARRY);
+    }
+
+    fn sec(&mut self) {
+        // Sets carry flag
+        self.status.insert(CpuStatus::CARRY);
+    }
+
+    fn cli(&mut self) {
+        // Clears interrupt flag
+        self.status.remove(CpuStatus::INT_DISABLE);
+    }
+
+    fn sei(&mut self) {
+        // Sets interrupt flag
+        self.status.insert(CpuStatus::INT_DISABLE);
+    }
+
+    fn clv(&mut self) {
+        // Clears overflow flag
+        self.status.remove(CpuStatus::OVERFLOW);
+    }
+
+    fn cld(&mut self) {
+        // Clears decimal flag
+        self.status.remove(CpuStatus::DECIMAL);
+    }
+
+    fn sed(&mut self) {
+        // Sets decimal flag
+        self.status.insert(CpuStatus::DECIMAL);
+    }
+
+    fn inc(&mut self, address: u16) {
+        // Affects Flags: N Z
+        let result = self.bus.read(address).wrapping_add(1);
+        self.bus.write(address, result);
+
+        self.set_negative_flag(result);
+        self.set_zero_flag(result);
+    }
+    
+    fn jmp(&mut self, address: u16) {
+        // Affects Flags: None
+        todo!();
+    }
+
+    fn jsr(&mut self, address: u16) {
+        // Affects Flags: None
+        todo!()
+    }
+
 
     fn lda(&mut self, parameter: u8) {
         // Affects Flags: N Z
         self.reg_a = parameter;
 
-        // check zero flag
-        if self.reg_a == 0 {
-            self.status.insert(CpuStatus::ZERO);
-        } else {
-            self.status.remove(CpuStatus::ZERO);
-        }
-        // check neg flag
-        if self.reg_a & 0b1000_0000 != 0 {
-            self.status.insert(CpuStatus::NEGATIVE);
-        } else {
-            self.status.remove(CpuStatus::NEGATIVE);
-        }
+        self.set_negative_flag(self.reg_a);
+        self.set_zero_flag(self.reg_a);
     }
 
     fn ldx(&mut self, parameter: u8) {
         // Affects Flags: N Z
         self.reg_x = parameter;
 
-        // check zero flag
-        if self.reg_x == 0 {
-            self.status.insert(CpuStatus::ZERO);
-        } else {
-            self.status.remove(CpuStatus::ZERO);
-        }
-        // check neg flag
-        if self.reg_x & 0b1000_0000 != 0 {
-            self.status.insert(CpuStatus::NEGATIVE);
-        } else {
-            self.status.remove(CpuStatus::NEGATIVE);
-        }
+        self.set_negative_flag(self.reg_x);
+        self.set_zero_flag(self.reg_x);
     }
 
     fn ldy(&mut self, parameter: u8) {
         // Affects Flags: N Z
         self.reg_y = parameter;
 
-        // check zero flag
-        if self.reg_y == 0 {
-            self.status.insert(CpuStatus::ZERO);
+        self.set_negative_flag(self.reg_y);
+        self.set_zero_flag(self.reg_y);
+    }
+
+    fn lsr(&mut self, parameter: u8) {
+        // Affects Flags: N Z C
+        // I think this writes to reg_a? Not sure
+        self.reg_a = parameter >> 1;
+
+        self.set_negative_flag(self.reg_a);
+        self.set_zero_flag(self.reg_a);
+        // Special carry flag case
+        if parameter % 2 == 1 {
+            self.status.insert(CpuStatus::CARRY);
         } else {
-            self.status.remove(CpuStatus::ZERO);
+            self.status.remove(CpuStatus::CARRY);
         }
-        // check neg flag
-        if self.reg_y & 0b1000_0000 != 0 {
-            self.status.insert(CpuStatus::NEGATIVE);
-        } else {
-            self.status.remove(CpuStatus::NEGATIVE);
-        }
+    }
+
+    fn ora(&mut self, parameter: u8) {
+        // Affects Flags: N Z
+        self.reg_a = self.reg_a | parameter;
+
+        self.set_negative_flag(self.reg_a);
+        self.set_zero_flag(self.reg_a);
     }
 
     fn tax(&mut self) {
         // Affects Flags: N Z
         self.reg_x = self.reg_a;
 
-        // check zero flag
-        if self.reg_x == 0 {
-            self.status.insert(CpuStatus::ZERO);
-        } else {
-            self.status.remove(CpuStatus::ZERO);
-        }
-        // check neg flag
-        if self.reg_x & 0b1000_0000 != 0 {
-            self.status.insert(CpuStatus::NEGATIVE);
-        } else {
-            self.status.remove(CpuStatus::NEGATIVE);
-        }
+        self.set_negative_flag(self.reg_x);
+        self.set_zero_flag(self.reg_x);
+    }
 
+    fn txa(&mut self) {
+        // Affects Flags: N Z
+        self.reg_a = self.reg_x;
+
+        self.set_negative_flag(self.reg_a);
+        self.set_zero_flag(self.reg_a);
+    }
+
+    fn dex(&mut self) {
+        // Affects Flags: N Z
+        self.reg_x = self.reg_x.wrapping_sub(1);
+
+        self.set_negative_flag(self.reg_x);
+        self.set_zero_flag(self.reg_x);
     }
 
     fn inx(&mut self) {
-        self.reg_x += 1
+        // Affects Flags: N Z
+        self.reg_x = self.reg_x.wrapping_add(1);
+
+        self.set_negative_flag(self.reg_x);
+        self.set_zero_flag(self.reg_x);
+    }
+
+    fn tay(&mut self) {
+        // Affects Flags: N Z
+        self.reg_y = self.reg_a;
+
+        self.set_negative_flag(self.reg_y);
+        self.set_zero_flag(self.reg_y);
+    }
+
+    fn tya(&mut self) {
+        // Affects Flags: N Z
+        self.reg_a = self.reg_y;
+
+        self.set_negative_flag(self.reg_a);
+        self.set_zero_flag(self.reg_a);
+    }
+
+    fn dey(&mut self) {
+        // Affects Flags: N Z
+        self.reg_y = self.reg_x.wrapping_sub(1);
+
+        self.set_negative_flag(self.reg_y);
+        self.set_zero_flag(self.reg_y);
     }
 
     fn iny(&mut self) {
-        self.reg_y += 1;
+        // Affects Flags: N Z
+        self.reg_y = self.reg_x.wrapping_add(1);
+
+        self.set_negative_flag(self.reg_y);
+        self.set_zero_flag(self.reg_y);
+    }
+
+    fn rol(&mut self, parameter: u8) {
+        // Affects Flags: N Z C
+        let mut result = (parameter as u16) << 1;
+        if self.status.contains(CpuStatus::CARRY) {
+            result += 1;    // this should be safe from overflow
+        }
+        self.reg_a = result as u8;
+
+        self.set_negative_flag(self.reg_a);
+        self.set_zero_flag(self.reg_a);
+        self.set_carry_flag(result);
+    }
+
+    fn ror(&mut self, parameter: u8) {
+        let mut result = parameter >> 1;
+        if self.status.contains(CpuStatus::CARRY) {
+            result += 0b1000_000;
+        }
+        self.reg_a = result;
+        
+        self.set_negative_flag(result);
+        self.set_zero_flag(result);
+        // Special carry flag case
+        if parameter % 2 == 1 {
+            self.status.insert(CpuStatus::CARRY);
+        } else {
+            self.status.remove(CpuStatus::CARRY);
+        }
+    }
+
+    fn rti(&mut self) {
+        // Affected Flags: All
+    }
+
+    fn rts(&mut self) {
+        // Affected Flags: None
+    }
+
+    fn sbc(&mut self, parameter: u8) {
+
     }
 
     fn sta(&mut self, address: u16) {
-        self.bus.write(address, self.reg_a)
+        // Affected Flags: None
+        self.bus.write(address, self.reg_a);
     }
+
+    fn stx(&mut self, address: u16) {
+        // Affected Flags: None
+        self.bus.write(address, self.reg_x);
+    }
+
+    fn sty(&mut self, address: u16) {
+        // Affected Flags: None
+        self.bus.write(address, self.reg_y);
+    }
+
 }
 
 #[cfg(test)]
@@ -750,7 +1262,6 @@ mod tests {
 
     #[test]
     pub fn test_lda_sta() {
-        let mut cpu = CPU::new();
         // $0600    a9 01     LDA #$01
         // $0602    8d 00 02  STA $0200
         // $0605    a9 05     LDA #$05
@@ -763,6 +1274,7 @@ mod tests {
         // SP=$ff PC=$0613
         // NV-BDIZC
         // 00110000
+        let mut cpu = CPU::new();
         let program = vec![
             0xA9, 0x01, 
             0x8D, 0x00, 0x02,
@@ -784,7 +1296,40 @@ mod tests {
         assert_eq!(
             [cpu.bus.read(0x200), cpu.bus.read(0x201), cpu.bus.read(0x202)], 
             [0x01, 0x05, 0x08]
-        )
+        );
+    }
 
+    #[test]
+    pub fn test_lda_tax_inx_adc_brk() {
+        // $0600    a9 c0     LDA #$c0
+        // $0602    aa        TAX 
+        // $0603    e8        INX 
+        // $0604    69 c4     ADC #$c4
+        // $0606    00        BRK 
+
+        // Expected
+        // A=$84 X=$c1 Y=$00
+        // SP=$ff PC=$060a
+        // NV-BDIZC
+        // 10110001
+        let mut cpu = CPU::new();
+        let program = vec![
+            0xA9, 0xC0,
+            0xAA,
+            0xE8,
+            0x69, 0xC4,
+            0x00,
+        ];
+
+        cpu.run_program(program);
+
+        // assert registers
+        assert_eq!(0x84, cpu.reg_a);
+        assert_eq!(0xc1, cpu.reg_x);
+        assert_eq!(0x00, cpu.reg_y);
+        // assert status
+        assert!(cpu.status.contains(
+            CpuStatus::NEGATIVE | CpuStatus::ALWAYS | CpuStatus::BRK
+        ));
     }
 }
