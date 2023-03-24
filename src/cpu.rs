@@ -25,8 +25,8 @@ pub enum Instruction { // Reorder these at some point to something more logical
     BCS,
     BNE,
     BEQ,
-
     BRK,
+    //
     CMP,
     CPX,
     CPY,
@@ -40,7 +40,6 @@ pub enum Instruction { // Reorder these at some point to something more logical
     CLV,
     CLD,
     SED,
-
     INC,
     JMP,
     JSR,
@@ -50,7 +49,6 @@ pub enum Instruction { // Reorder these at some point to something more logical
     LSR,
     NOP,
     ORA,
-    
     // Register instructions
     TAX,
     TXA,
@@ -60,14 +58,12 @@ pub enum Instruction { // Reorder these at some point to something more logical
     TYA,
     DEY,
     INY,
-
     ROL,
     ROR,
     RTI,
     RTS,
     SBC,
     STA,
-
     // Stack instructions
     TXS,
     TSX,
@@ -586,16 +582,17 @@ impl CPU {
             self.execute_instruction(instruction, parameter);
 
             // 4. Check if program is done, if done return TODO turn to check brk flag
-            if self.read_byte(&program) == None {
-                self.status.insert(CpuStatus::BRK);
-                ()
-            }
+            // if self.read_byte(&program) == None {
+            //     self.status.insert(CpuStatus::BRK);
+            //     ()
+            // }
         }
     }
 
 
     pub fn execute_instruction(&mut self, instruction: Instruction, parameter: Option<Param>) {
         // FUTURE WORK: can probably condense this more, but not really necessary
+        println!("Executing instruction");
         match instruction {
             Instruction::ADC => {
                 match parameter {
@@ -634,6 +631,69 @@ impl CPU {
                 }
             }
             // Add branching here
+            Instruction::BPL => {
+                match parameter {
+                    Some(Param::Value(val)) => 
+                        self.bpl(val),
+                    _ => panic!("Invalid parameter"),
+                }
+            },
+            Instruction::BMI => {
+                match parameter {
+                    Some(Param::Value(val)) => 
+                        self.bmi(val),
+                    _ => panic!("Invalid parameter"),
+                }
+            },
+            Instruction::BVC => {
+                match parameter {
+                    Some(Param::Value(val)) => 
+                        self.bvc(val),
+                    _ => panic!("Invalid parameter"),
+                }
+            },
+            Instruction::BVS => {
+                match parameter {
+                    Some(Param::Value(val)) => 
+                        self.bvs(val),
+                    _ => panic!("Invalid parameter"),
+                }
+            },
+            Instruction::BCC => {
+                match parameter {
+                    Some(Param::Value(val)) => 
+                        self.bcc(val),
+                    _ => panic!("Invalid parameter"),
+                }
+            },
+            Instruction::BCS => {
+                match parameter {
+                    Some(Param::Value(val)) => 
+                        self.bcs(val),
+                    _ => panic!("Invalid parameter"),
+                }
+            },
+            Instruction::BNE => {
+                match parameter {
+                    Some(Param::Value(val)) => 
+                        self.bne(val),
+                    _ => panic!("Invalid parameter"),
+                }
+            },
+            Instruction::BEQ => {
+                match parameter {
+                    Some(Param::Value(val)) => 
+                        self.beq(val),
+                    _ => panic!("Invalid parameter"),
+                }
+            },
+            Instruction::BRK => {
+                match parameter {
+                    None =>
+                        self.brk(),
+                    _ => panic!("Invalid parameter"),
+                }
+            },
             Instruction::CMP => {
                 match parameter {
                     Some(Param::Value(val)) => 
@@ -783,12 +843,72 @@ impl CPU {
                     _ => panic!("Invalid parameter"),
                 }
             },
+            Instruction::NOP => {
+
+            }
             Instruction::ORA => {
                 match parameter {
                     Some(Param::Value(val)) => 
                         self.ora(val),
                     Some(Param::Address(mem_addr)) => 
                         self.ora(self.bus.read(mem_addr)),
+                    _ => panic!("Invalid parameter"),
+                }
+            },
+            // Register instructions
+            Instruction::TAX => {
+                match parameter {
+                    None => 
+                        self.tax(),
+                    _ => panic!("Invalid parameter"),
+                }
+            },
+            Instruction::TXA => {
+                match parameter {
+                    None => 
+                        self.txa(),
+                    _ => panic!("Invalid parameter"),
+                }
+            },
+            Instruction::DEX => {
+                match parameter {
+                    None => 
+                        self.dex(),
+                    _ => panic!("Invalid parameter"),
+                }
+            },
+            Instruction::INX => {
+                match parameter {
+                    None => 
+                        self.inx(),
+                    _ => panic!("Invalid parameter"),
+                }
+            },
+            Instruction::TAY => {
+                match parameter {
+                    None => 
+                        self.tay(),
+                    _ => panic!("Invalid parameter"),
+                }
+            },
+            Instruction::TYA => {
+                match parameter {
+                    None => 
+                        self.tya(),
+                    _ => panic!("Invalid parameter"),
+                }
+            },
+            Instruction::DEY => {
+                match parameter {
+                    None => 
+                        self.dey(),
+                    _ => panic!("Invalid parameter"),
+                }
+            },
+            Instruction::INY => {
+                match parameter {
+                    None => 
+                        self.iny(),
                     _ => panic!("Invalid parameter"),
                 }
             },
@@ -817,6 +937,13 @@ impl CPU {
                     _ => panic!("Invalid parameter"),
                 }
             },
+            Instruction::RTS => {
+                match parameter {
+                    None => 
+                        self.rts(),
+                    _ => panic!("Invalid parameter"),
+                }
+            }
             Instruction::SBC => {
                 match parameter {
                     Some(Param::Value(val)) => 
@@ -826,26 +953,47 @@ impl CPU {
                     _ => panic!("Invalid parameter"),
                 }
             },
-            // Instruction::TAX => self.tax(),
+            // Stack instructions
+            Instruction::TXS => {
+                todo!()
+            },
+            Instruction::TSX => {
+                todo!()
+            },
+            Instruction::PHA => {
+                todo!()
+            },
+            Instruction::PLA => {
+                todo!()
+            },
+            Instruction::PHP => {
+                todo!()
+            },
+            Instruction::PLP => {
+                todo!()
+            },
             Instruction::STA => {
                 match parameter {
-                    Some(Param::Address(mem_addr)) => self.sta(mem_addr),
+                    Some(Param::Address(mem_addr)) => 
+                        self.sta(mem_addr),
                     _ => panic!("Invalid parameter"),
                 }
             },
             Instruction::STX => {
                 match parameter {
-                    Some(Param::Address(mem_addr)) => self.stx(mem_addr),
+                    Some(Param::Address(mem_addr)) => 
+                        self.stx(mem_addr),
                     _ => panic!("Invalid parameter"),
                 }
             },
             Instruction::STY => {
                 match parameter {
-                    Some(Param::Address(mem_addr)) => self.sty(mem_addr),
+                    Some(Param::Address(mem_addr)) => 
+                        self.sty(mem_addr),
                     _ => panic!("Invalid parameter"),
                 }
             },
-            _ => panic!("Not implemented"),
+            // _ => panic!("Not implemented"),
         }
     }
 
@@ -945,6 +1093,10 @@ impl CPU {
     }
 
     fn bvc(&mut self, parameter: u8) {
+
+    }
+
+    fn bvs(&mut self, parameter: u8) {
 
     }
 
@@ -1291,7 +1443,10 @@ mod tests {
         assert_eq!(0x00, cpu.reg_x);
         assert_eq!(0x00, cpu.reg_y);
         // assert status
-        assert!(cpu.status.contains(CpuStatus::ALWAYS | CpuStatus::BRK));
+        println!("{:b}", cpu.status.bits());
+        assert!(cpu.status.contains(
+            CpuStatus::ALWAYS
+        ));
         // assert memory
         assert_eq!(
             [cpu.bus.read(0x200), cpu.bus.read(0x201), cpu.bus.read(0x202)], 
