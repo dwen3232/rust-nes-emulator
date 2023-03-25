@@ -12,68 +12,18 @@ pub fn some_function() -> i32 {
 
 #[derive(Debug)]
 pub enum Instruction { // Reorder these at some point to something more logical
-    ADC,
-    AND,
-    ASL,
-    BIT,
+    ADC, AND, ASL, BIT,
     // Branching instructions
-    BPL,
-    BMI,
-    BVC,
-    BVS,
-    BCC,
-    BCS,
-    BNE,
-    BEQ,
-    BRK,
-    //
-    CMP,
-    CPX,
-    CPY,
-    DEC,
-    EOR,
+    BPL, BMI, BVC, BVS, BCC, BCS, BNE, BEQ, BRK,
+    CMP, CPX, CPY, DEC, EOR,
     // Flag instructions
-    CLC,
-    SEC,
-    CLI,
-    SEI,
-    CLV,
-    CLD,
-    SED,
-    INC,
-    JMP,
-    JSR,
-    LDA,
-    LDX,
-    LDY,
-    LSR,
-    NOP,
-    ORA,
+    CLC, SEC, CLI, SEI, CLV, CLD, SED,
+    INC, JMP, JSR, LDA, LDX, LDY, LSR, NOP, ORA,
     // Register instructions
-    TAX,
-    TXA,
-    DEX,
-    INX,
-    TAY,
-    TYA,
-    DEY,
-    INY,
-    ROL,
-    ROR,
-    RTI,
-    RTS,
-    SBC,
-    STA,
+    TAX, TXA, DEX, INX, TAY, TYA, DEY, INY, ROL, ROR, RTI, RTS, SBC,
     // Stack instructions
-    TXS,
-    TSX,
-    PHA,
-    PLA,
-    PHP,
-    PLP,
-
-    STX,
-    STY,
+    TXS, TSX, PHA, PLA, PHP, PLP,
+    STA, STX, STY,
 }
 
 #[derive(Debug)]
@@ -135,14 +85,10 @@ pub struct CPU {
     bus: Bus,
 }
 
-const ADDRESSING_MODE_MASK: u8 = 0b0001_1100;
-const INSTRUCTION_MASK: u8 = 0b1110_0011;
-
 impl CPU {
-    pub fn decode_opcode(&self, opcode: u8) -> (Instruction, AddressingMode) {
-        /// Used this reference for decoding opcodes to instruction addressing mode pairs
-        /// Ref: http://www.6502.org/tutorials/6502opcodes.html#LDA
-        println!("Received opcode {opcode:02x}");
+    fn decode_opcode(&self, opcode: u8) -> (Instruction, AddressingMode) {
+        // Used this reference for decoding opcodes to instruction addressing mode pairs
+        // Ref: http://www.6502.org/tutorials/6502opcodes.html#LDA
         let result = match opcode {
             // Immediate     ADC #$44      $69  2   2
             // Zero Page     ADC $44       $65  2   3
@@ -446,33 +392,14 @@ impl CPU {
             0x84 => (Instruction::STY, AddressingMode::ZeroPage),
             0x94 => (Instruction::STY, AddressingMode::ZeroPageIndexX),
             0x8C => (Instruction::STY, AddressingMode::Absolute),
-            _ => panic!("Opcode not implemented {}", opcode)
+            _ => panic!("Opcode not implemented {:x}", opcode)
         };
-        println!("Decoded opcode to {result:?}");
         result
-    }
-}
-
-
-
-impl CPU {
-    
-    pub fn new() -> Self {
-        CPU {
-            reg_a: 0,
-            reg_x: 0,
-            reg_y: 0,
-            status: CpuStatus::ALWAYS | CpuStatus::BRK,
-            stack_pointer: STACK_POINTER_START,      // probably needs to initialize to something else
-            program_counter: PROGRAM_COUNTER_START,      // same here
-            bus: Bus::new(),
-        }
     }
 
     fn read_arg(&mut self, mode: &AddressingMode, program: &Vec<u8>) -> Option<Param> {
-        /// Based on the addressing mode, read `n` number of argument bytes from the program and process it into a parameter
-        /// to be used by some instruction
-        println!("Reading argument...");
+        // Based on the addressing mode, read `n` number of argument bytes from the program and process it into a parameter
+        // to be used by some instruction
         match mode {
             AddressingMode::Implicit => None,
             AddressingMode::Accumulator => {
@@ -548,45 +475,23 @@ impl CPU {
             },
         }
     }
+}
 
-    fn read_byte(&mut self, program: &Vec<u8>) -> Option<u8> {
-        println!("Read byte at {:02x}", self.program_counter);
-        println!("{} - {} = {}", self.program_counter, PROGRAM_COUNTER_START, self.program_counter - PROGRAM_COUNTER_START);
-        
-        // must increment program counter before the attempted read returns None
-        let read_addr = self.program_counter;
-        self.program_counter += 1;
-
-        let byte = *program.get((read_addr - PROGRAM_COUNTER_START) as usize)?;
-        println!("Found byte {:02x}", byte);
-        
-        Some(byte)
+impl CPU {  // Public functions
+    pub fn new() -> Self {
+        CPU {
+            reg_a: 0,
+            reg_x: 0,
+            reg_y: 0,
+            status: CpuStatus::ALWAYS | CpuStatus::BRK,
+            stack_pointer: STACK_POINTER_START,      // probably needs to initialize to something else
+            program_counter: PROGRAM_COUNTER_START,      // same here
+            bus: Bus::new(),
+        }
     }
+    // pub fn run_program_with_callback(&mut self, program: Vec<u8>) -> Result<(), String> {
 
-    fn read_two_bytes(&mut self, program: &Vec<u8>) -> Option<u16> {
-        println!("Read bytes at {:02x}, {:02x}", self.program_counter, self.program_counter + 1);
-
-        let lsb = self.read_byte(program)? as u16;
-        
-        let msb = self.read_byte(program)? as u16;
-        
-
-        let two_bytes = (msb << 8) + lsb;
-        Some(two_bytes)
-    }
-
-    fn push_to_stack(&mut self, value: u8) {
-        // stack located from 0x100 to 0x1FF, growing downward
-        let stack_addr = (self.stack_pointer as u16) + 0x100;
-        self.stack_pointer -= 1;
-        self.bus.write(stack_addr, value);
-    }
-
-    fn pop_from_stack(&mut self) -> u8 {
-        let stack_addr = (self.stack_pointer as u16) + 0x100;
-        self.stack_pointer += 1;
-        self.bus.read(stack_addr)
-    }
+    // }
 
     pub fn run_program(&mut self, program: Vec<u8>) -> Result<(), String> { 
         // This function will take in a program, and execute it step by step
@@ -614,10 +519,8 @@ impl CPU {
         }
     }
 
-
     pub fn execute_instruction(&mut self, instruction: Instruction, parameter: Option<Param>) {
         // FUTURE WORK: can probably condense this more, but not really necessary
-        println!("Executing instruction");
         match instruction {
             Instruction::ADC => {
                 match parameter {
@@ -1045,6 +948,36 @@ impl CPU {
             // _ => panic!("Not implemented"),
         }
     }
+}
+
+impl CPU {  // helper functions
+    fn read_byte(&mut self, program: &Vec<u8>) -> Option<u8> {
+        // must increment program counter before the attempted read returns None
+        let read_addr = self.program_counter;
+        self.program_counter += 1;
+        let byte = *program.get((read_addr - PROGRAM_COUNTER_START) as usize)?;
+        Some(byte)
+    }
+
+    fn read_two_bytes(&mut self, program: &Vec<u8>) -> Option<u16> {
+        let lsb = self.read_byte(program)? as u16;
+        let msb = self.read_byte(program)? as u16;
+        let two_bytes = (msb << 8) + lsb;
+        Some(two_bytes)
+    }
+
+    fn push_to_stack(&mut self, value: u8) {
+        // stack located from 0x100 to 0x1FF, growing downward
+        let stack_addr = (self.stack_pointer as u16) + 0x100;
+        self.stack_pointer -= 1;
+        self.bus.write(stack_addr, value);
+    }
+
+    fn pop_from_stack(&mut self) -> u8 {
+        let stack_addr = (self.stack_pointer as u16) + 0x100;
+        self.stack_pointer += 1;
+        self.bus.read(stack_addr)
+    }
 
     fn set_zero_flag(&mut self, result: u8) {
         if result == 0 {
@@ -1071,6 +1004,9 @@ impl CPU {
         }
     } 
 
+}
+
+impl CPU {  // implement specific ISA instructions
     fn adc(&mut self, parameter: u8) {
         /// Affects Flags: N V Z C
 
@@ -1544,14 +1480,12 @@ impl CPU {
     fn stx(&mut self, address: u16) {
         // Affected Flags: None
         self.bus.write(address, self.reg_x);
-        println!("Redundant read {:x}", self.bus.read(address));
     }
 
     fn sty(&mut self, address: u16) {
         // Affected Flags: None
         self.bus.write(address, self.reg_y);
     }
-
 }
 
 #[cfg(test)]
