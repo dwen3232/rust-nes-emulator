@@ -8,14 +8,27 @@
 // $4018–$401F	$0008	APU and I/O functionality that is normally disabled. See CPU Test Mode.
 // $4020–$FFFF	$BFE0	Cartridge space: PRG ROM, PRG RAM, and mapper registers (see note)
 
-const RAM_START: u16 = 0x0000;
-const RAM_END: u16 = 0x1FFF;
-const PPU_REG_START: u16 = 0x2000;
-const PPU_REG_END: u16 = 0x3FFF;
-const APUIO_START: u16 = 0x4000;
-const APUIO_END: u16 = 0x401F;
-const CART_START: u16 = 0x4020;
-const CART_END: u16 = 0xFFFF;
+// More on the cartridge:
+// $6000–$7FFF = Battery Backed Save or Work RAM
+// $8000–$FFFF = Usual ROM, commonly with Mapper Registers (see MMC1 and UxROM for example)
+// UxROM Ref: https://www.nesdev.org/wiki/UxROM
+
+
+use core::panic;
+
+use crate::cartridge::ROM;
+
+const RAM_START: u16 =      0x0000;
+const RAM_END: u16 =        0x1FFF;
+const PPU_REG_START: u16 =  0x2000;
+const PPU_REG_END: u16 =    0x3FFF;
+const APUIO_START: u16 =    0x4000;
+const APUIO_END: u16 =      0x401F;
+const CART_START: u16 =     0x4020;
+const CART_END: u16 =       0xFFFF;
+
+const PRG_ROM_START: u16 =  0x8000;
+const PRG_ROM_END: u16 =    0xFFFF;
 
 
 const RAM_MASK: u16 = (0b1 << 11) -1;
@@ -25,18 +38,28 @@ const PPU_MASK: u16 = (0b1 << 3) - 1;
 pub struct Bus {
     ram: [u8; 0x800],   // 2KB RAM
     ppu_reg: [u8; 8],   // 8 PPU registers
+    cartridge: ROM,
 }
 
 
 impl Bus {
-    pub fn new() -> Self {
+    pub fn new_empty() -> Self {
         Bus {
             ram: [0; 0x800],
             ppu_reg: [0; 8],
+            cartridge: ROM::new_empty(),
         }
     }
 
-    pub fn write(&mut self, index: u16, value: u8) {
+    pub fn new(cartridge: ROM) -> Self {
+        Bus {
+            ram: [0; 0x800],
+            ppu_reg: [0; 8],
+            cartridge: cartridge,
+        }
+    }
+
+    pub fn write_byte(&mut self, index: u16, value: u8) {
         match index {
             RAM_START ..= RAM_END => {
                 self.ram[(index & RAM_MASK) as usize] = value
@@ -48,12 +71,12 @@ impl Bus {
                 todo!("Not implemented")
             },
             CART_START ..= CART_END => {
-                todo!("Not implemented")
+                panic!("Attempted write to read only memory, address {:x}", index);
             }
         }
     }
 
-    pub fn read(&self, index: u16) -> u8{
+    pub fn read_byte(&self, index: u16) -> u8{
         match index {
             RAM_START ..= RAM_END => {
                 self.ram[(index & RAM_MASK) as usize]
@@ -62,13 +85,22 @@ impl Bus {
                 self.ram[(index & PPU_MASK) as usize]
             },
             APUIO_START ..= APUIO_END => {
-                todo!("Not implemented")
+                todo!("APU/IO Not implemented")
             },
-            CART_START ..= CART_END => {
-                todo!("Not implemented")
-            }
+            PRG_ROM_START ..= PRG_ROM_END => {
+                let index = index - PRG_ROM_START;
+                self.cartridge.read_prg(index)
+            },
+            _ => panic!("Cannot read from {:x}", index)
         }
     }
+
+    pub fn read_two_bytes(&self, index: u16) -> u16 {
+        let lsb = self.read_byte(index) as u16;
+        let msb = self.read_byte(index + 1) as u16;
+        (msb << 8) + lsb
+    }
+
 }
 
 
@@ -80,17 +112,17 @@ mod tests {
 
     #[test]
     fn test_all_ram_index_valid() {
-        let mut mem = Bus::new();
+        let mut mem = Bus::new_empty();
         // populate with some data
         for i in 0..0x800u16 {
-            mem.write(i, (i / 8) as u8);
+            mem.write_byte(i, (i / 8) as u8);
         }
 
         for i in 0..0x800u16 {
-            assert_eq!((i / 8) as u8, mem.read(i));
-            assert_eq!((i / 8) as u8, mem.read(i + 0x800));
-            assert_eq!((i / 8) as u8, mem.read(i + 0x1000));
-            assert_eq!((i / 8) as u8, mem.read(i + 0x1800));
+            assert_eq!((i / 8) as u8, mem.read_byte(i));
+            assert_eq!((i / 8) as u8, mem.read_byte(i + 0x800));
+            assert_eq!((i / 8) as u8, mem.read_byte(i + 0x1000));
+            assert_eq!((i / 8) as u8, mem.read_byte(i + 0x1800));
         }
     }
 
