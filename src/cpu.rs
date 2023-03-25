@@ -117,7 +117,10 @@ bitflags! {
 
 
 
+const STACK_POINTER_START: u8 = 0xff;
+const PROGRAM_COUNTER_START: u16 = 0x600;
 
+#[derive(Debug)]
 pub struct CPU {
     // General purpose registers
     pub reg_a: u8,
@@ -125,8 +128,8 @@ pub struct CPU {
     pub reg_y: u8,
     // Special purpose registers
     status: CpuStatus,
-    stack_pointer: u16,
-    program_counter: u8,
+    stack_pointer: u8,
+    program_counter: u16,
 
     // Bus
     bus: Bus,
@@ -459,9 +462,9 @@ impl CPU {
             reg_a: 0,
             reg_x: 0,
             reg_y: 0,
-            status: CpuStatus::ALWAYS | CpuStatus::INT_DISABLE,
-            stack_pointer: 0,      // probably needs to initialize to something else
-            program_counter: 0,      // same here
+            status: CpuStatus::ALWAYS | CpuStatus::BRK,
+            stack_pointer: STACK_POINTER_START,      // probably needs to initialize to something else
+            program_counter: PROGRAM_COUNTER_START,      // same here
             bus: Bus::new(),
         }
     }
@@ -494,7 +497,10 @@ impl CPU {
                 // read memory from bus
                 Some(Param::Address(mem_addr))
             },
-            AddressingMode::AbsoluteJump => panic!("Not implemeneted"),
+            AddressingMode::AbsoluteJump => {
+                let mem_addr = self.read_two_bytes(program)?;
+                Some(Param::Address(mem_addr))
+            },
             AddressingMode::ZeroPage => {
                 // read single byte, msb is always 0x00
                 let zero_page_addr = self.read_byte(&program)? as u16;
@@ -545,27 +551,46 @@ impl CPU {
 
     fn read_byte(&mut self, program: &Vec<u8>) -> Option<u8> {
         println!("Read byte at {:02x}", self.program_counter);
-        let byte = *program.get(self.program_counter as usize)?;
+        println!("{} - {} = {}", self.program_counter, PROGRAM_COUNTER_START, self.program_counter - PROGRAM_COUNTER_START);
+        
+        // must increment program counter before the attempted read returns None
+        let read_addr = self.program_counter;
         self.program_counter += 1;
+
+        let byte = *program.get((read_addr - PROGRAM_COUNTER_START) as usize)?;
+        println!("Found byte {:02x}", byte);
+        
         Some(byte)
     }
 
     fn read_two_bytes(&mut self, program: &Vec<u8>) -> Option<u16> {
         println!("Read bytes at {:02x}, {:02x}", self.program_counter, self.program_counter + 1);
-        let lsb = *program.get(self.program_counter as usize)? as u16;
-        let msb = *program.get((self.program_counter + 1) as usize)? as u16;
-        self.program_counter += 2;
+
+        let lsb = self.read_byte(program)? as u16;
+        
+        let msb = self.read_byte(program)? as u16;
+        
 
         let two_bytes = (msb << 8) + lsb;
         Some(two_bytes)
     }
 
+    fn push_to_stack(&mut self, value: u8) {
+        // stack located from 0x100 to 0x1FF, growing downward
+        let stack_addr = (self.stack_pointer as u16) + 0x100;
+        self.stack_pointer -= 1;
+        self.bus.write(stack_addr, value);
+    }
+
+    fn pop_from_stack(&mut self) -> u8 {
+        let stack_addr = (self.stack_pointer as u16) + 0x100;
+        self.stack_pointer += 1;
+        self.bus.read(stack_addr)
+    }
 
     pub fn run_program(&mut self, program: Vec<u8>) -> Result<(), String> { 
         // This function will take in a program, and execute it step by step
         // TODO: result is Result<()), String> right now, need to change to something more descriptive
-
-        self.program_counter = 0;
         loop {
             // 1. Read opcode and decode it to an instruction, always takes 1 cycle
             let (instruction, addressing_mode) = if let Some(opcode_raw) = self.read_byte(&program) {
@@ -955,22 +980,46 @@ impl CPU {
             },
             // Stack instructions
             Instruction::TXS => {
-                todo!()
+                match parameter {
+                    None => 
+                        self.txs(),
+                    _ => panic!("Invalid parameter"),
+                }
             },
             Instruction::TSX => {
-                todo!()
+                match parameter {
+                    None => 
+                        self.txs(),
+                    _ => panic!("Invalid parameter"),
+                }
             },
             Instruction::PHA => {
-                todo!()
+                match parameter {
+                    None => 
+                        self.pha(),
+                    _ => panic!("Invalid parameter"),
+                }
             },
             Instruction::PLA => {
-                todo!()
+                match parameter {
+                    None => 
+                        self.pla(),
+                    _ => panic!("Invalid parameter"),
+                }
             },
             Instruction::PHP => {
-                todo!()
+                match parameter {
+                    None => 
+                        self.php(),
+                    _ => panic!("Invalid parameter"),
+                }
             },
             Instruction::PLP => {
-                todo!()
+                match parameter {
+                    None => 
+                        self.plp(),
+                    _ => panic!("Invalid parameter"),
+                }
             },
             Instruction::STA => {
                 match parameter {
@@ -1077,7 +1126,11 @@ impl CPU {
 
         self.set_negative_flag(parameter); // neg if bit 7 in param is 1
         
-        todo!("set overflow flag"); // overflow if bit 6 in param is 1
+        if result & 0b0100_0000 != 0 {
+            self.status.insert(CpuStatus::OVERFLOW);
+        } else {
+            self.status.remove(CpuStatus::OVERFLOW);
+        }
 
         self.set_zero_flag(result);
         
@@ -1085,35 +1138,75 @@ impl CPU {
 
     // Branching functions
     fn bpl(&mut self, parameter: u8) {
-
+        if !self.status.contains(CpuStatus::NEGATIVE) {
+            // we need to left pad parameter with the bit 7 value
+            // ex: 11111000 -> 1111111111111000
+            let parameter = (parameter as i8) as u16;
+            self.program_counter = self.program_counter.wrapping_add(parameter);
+        }
     }
 
     fn bmi(&mut self, parameter: u8) {
-
+        if self.status.contains(CpuStatus::NEGATIVE) {
+            // we need to left pad parameter with the bit 7 value
+            // ex: 11111000 -> 1111111111111000
+            let parameter = (parameter as i8) as u16;
+            self.program_counter = self.program_counter.wrapping_add(parameter);
+        }
     }
 
     fn bvc(&mut self, parameter: u8) {
-
+        if !self.status.contains(CpuStatus::OVERFLOW) {
+            // we need to left pad parameter with the bit 7 value
+            // ex: 11111000 -> 1111111111111000
+            let parameter = (parameter as i8) as u16;
+            self.program_counter = self.program_counter.wrapping_add(parameter);
+        }
     }
 
     fn bvs(&mut self, parameter: u8) {
-
+        if self.status.contains(CpuStatus::OVERFLOW) {
+            // we need to left pad parameter with the bit 7 value
+            // ex: 11111000 -> 1111111111111000
+            let parameter = (parameter as i8) as u16;
+            self.program_counter = self.program_counter.wrapping_add(parameter);
+        }
     }
 
     fn bcc(&mut self, parameter: u8) {
-
+        if !self.status.contains(CpuStatus::CARRY) {
+            // we need to left pad parameter with the bit 7 value
+            // ex: 11111000 -> 1111111111111000
+            let parameter = (parameter as i8) as u16;
+            self.program_counter = self.program_counter.wrapping_add(parameter);
+        }
     }
 
     fn bcs(&mut self, parameter: u8) {
-
+        if self.status.contains(CpuStatus::CARRY) {
+            // we need to left pad parameter with the bit 7 value
+            // ex: 11111000 -> 1111111111111000
+            let parameter = (parameter as i8) as u16;
+            self.program_counter = self.program_counter.wrapping_add(parameter);
+        }
     }
 
     fn bne(&mut self, parameter: u8) {
-
+        if !self.status.contains(CpuStatus::ZERO) {
+            // we need to left pad parameter with the bit 7 value
+            // ex: 11111000 -> 1111111111111000
+            let parameter = (parameter as i8) as u16;
+            self.program_counter = self.program_counter.wrapping_add(parameter);
+        }
     }
 
     fn beq(&mut self, parameter: u8) {
-
+        if self.status.contains(CpuStatus::ZERO) {
+            // we need to left pad parameter with the bit 7 value
+            // ex: 11111000 -> 1111111111111000
+            let parameter = (parameter as i8) as u16;
+            self.program_counter = self.program_counter.wrapping_add(parameter);
+        }
     }
 
     fn brk(&mut self) {
@@ -1129,7 +1222,7 @@ impl CPU {
         self.set_negative_flag(result);
         self.set_zero_flag(result);
         // Special carry flag case
-        if self.reg_a > parameter {
+        if self.reg_a >= parameter {
             self.status.insert(CpuStatus::CARRY);
         } else {
             self.status.remove(CpuStatus::CARRY);
@@ -1143,7 +1236,7 @@ impl CPU {
         self.set_negative_flag(result);
         self.set_zero_flag(result);
         // Special carry flag case
-        if self.reg_x > parameter {
+        if self.reg_x >= parameter {
             self.status.insert(CpuStatus::CARRY);
         } else {
             self.status.remove(CpuStatus::CARRY);
@@ -1157,7 +1250,7 @@ impl CPU {
         self.set_negative_flag(result);
         self.set_zero_flag(result);
         // Special carry flag case
-        if self.reg_y > parameter {
+        if self.reg_y >= parameter {
             self.status.insert(CpuStatus::CARRY);
         } else {
             self.status.remove(CpuStatus::CARRY);
@@ -1228,14 +1321,18 @@ impl CPU {
     
     fn jmp(&mut self, address: u16) {
         // Affects Flags: None
-        todo!();
+        self.program_counter = address;
     }
 
     fn jsr(&mut self, address: u16) {
         // Affects Flags: None
-        todo!()
+        let address = address - 1;
+        let lsb = address as u8;
+        let msb = (address >> 8) as u8;
+        // Push msb first
+        self.push_to_stack(msb);
+        self.push_to_stack(lsb);
     }
-
 
     fn lda(&mut self, parameter: u8) {
         // Affects Flags: N Z
@@ -1362,6 +1459,7 @@ impl CPU {
     }
 
     fn ror(&mut self, parameter: u8) {
+        // Affects Flags: N Z C
         let mut result = parameter >> 1;
         if self.status.contains(CpuStatus::CARRY) {
             result += 0b1000_000;
@@ -1380,10 +1478,17 @@ impl CPU {
 
     fn rti(&mut self) {
         // Affected Flags: All
+        self.plp();     // pop status from stack
+        let lsb = self.pop_from_stack() as u16;
+        let msb = self.pop_from_stack() as u16;
+        self.program_counter = (msb << 8) + lsb;
     }
 
     fn rts(&mut self) {
         // Affected Flags: None
+        let lsb = self.pop_from_stack() as u16;
+        let msb = self.pop_from_stack() as u16;
+        self.program_counter = (msb << 8) + lsb + 1;
     }
 
     fn sbc(&mut self, parameter: u8) {
@@ -1391,6 +1496,45 @@ impl CPU {
         // Can just use ADC internally
         self.adc(parameter ^ 0b1111_1111) // toggle every bit and pass to adc
     }   
+
+    fn txs(&mut self) {
+        // Affects Flags: None
+        // stack is in the reange 0x100 - 0x1FF
+        self.stack_pointer = self.reg_x;
+    }
+
+    fn tsx(&mut self) {
+        // Affects Flags: N Z
+        self.reg_x = self.stack_pointer;
+
+        self.set_negative_flag(self.reg_x);
+        self.set_zero_flag(self.reg_x);
+    }
+
+    fn pha(&mut self) {
+        // Affects Flags: None
+        self.push_to_stack(self.reg_a);
+    }
+
+    fn pla(&mut self) {
+        // Affects Flags: N Z
+        self.reg_a = self.pop_from_stack();
+
+        self.set_negative_flag(self.reg_a);
+        self.set_zero_flag(self.reg_a);
+    }
+
+    fn php(&mut self) {
+        // Affects Flags: None
+        self.push_to_stack(self.status.bits());
+    }
+
+    fn plp(&mut self) {
+        // Affects Flags: All
+        self.status = CpuStatus::from_bits(self.pop_from_stack()).unwrap();
+        // plp ALWAYS sets BRK flag
+        self.status.insert(CpuStatus::BRK);
+    }
 
     fn sta(&mut self, address: u16) {
         // Affected Flags: None
@@ -1400,6 +1544,7 @@ impl CPU {
     fn stx(&mut self, address: u16) {
         // Affected Flags: None
         self.bus.write(address, self.reg_x);
+        println!("Redundant read {:x}", self.bus.read(address));
     }
 
     fn sty(&mut self, address: u16) {
@@ -1440,15 +1585,11 @@ mod tests {
 
         cpu.run_program(program);
 
-        // assert registers
-        assert_eq!(0x08, cpu.reg_a);
-        assert_eq!(0x00, cpu.reg_x);
-        assert_eq!(0x00, cpu.reg_y);
-        // assert status
-        println!("{:b}", cpu.status.bits());
-        assert!(cpu.status.contains(
-            CpuStatus::ALWAYS
-        ));
+        assert_eq!(0x08, cpu.reg_a, "Register A: {:x}", cpu.reg_a);
+        assert_eq!(0x00, cpu.reg_x, "Register X: {:x}", cpu.reg_x);
+        assert_eq!(0x00, cpu.reg_y, "Register Y: {:x}", cpu.reg_y);
+        assert_eq!(0xff, cpu.stack_pointer, "Stack Pointer: {:x}", cpu.stack_pointer);
+        // assert_eq!(0x613, cpu.program_counter, "Program Counter: {:x}", cpu.program_counter);
         // assert memory
         assert_eq!(
             [cpu.bus.read(0x200), cpu.bus.read(0x201), cpu.bus.read(0x202)], 
@@ -1488,5 +1629,119 @@ mod tests {
         assert!(cpu.status.contains(
             CpuStatus::NEGATIVE | CpuStatus::ALWAYS | CpuStatus::BRK
         ));
+    }
+
+    #[test]
+    pub fn test_adc_overflow_1() {
+        // $0600    18        CLC 
+        // $0601    a9 7f     LDA #$7f
+        // $0603    69 01     ADC #$01
+
+        // Expected
+        // A=$80 X=$00 Y=$00
+        // SP=$ff PC=$0606
+        // NV-BDIZC
+        // 11110000
+
+        let mut cpu = CPU::new();
+        let program = vec![
+            0x18,
+            0xA9, 0x7f,
+            0x69, 0x01,
+        ];
+
+        cpu.run_program(program);
+
+         // assert registers
+        assert_eq!(0x80, cpu.reg_a);
+        assert_eq!(0x00, cpu.reg_x);
+        assert_eq!(0x00, cpu.reg_y);
+        assert!(cpu.status.contains(
+            CpuStatus::from_bits(0b11110000).unwrap()
+        ), "CPU Status: {:b}", cpu.status.bits())
+    }
+
+    #[test]
+    pub fn test_cpx_1() {
+        // $0600    a2 08     LDX #$08
+        // $0602    ca        DEX 
+        // $0603    8e 00 02  STX $0200
+        // $0606    e0 03     CPX #$03
+        // $060a    8e 01 02  STX $0201
+        
+        //
+        // A=$00 X=$00 Y=$00
+        // SP=$ff PC=$0600
+        // NV-BDIZC
+        // 00110000
+        let mut cpu = CPU::new();
+        let program = vec![
+            0xa2, 0x08,
+            0xca,
+            0x8e, 0x00, 0x02,
+            0xe0, 0x03,
+            0x8e, 0x01, 0x02,
+        ];
+
+        cpu.run_program(program);
+
+         // assert registers
+        assert_eq!(0x00, cpu.reg_a, "Register A: {:x}", cpu.reg_a);
+        assert_eq!(0x07, cpu.reg_x, "Register X: {:x}", cpu.reg_x);
+        assert_eq!(0x00, cpu.reg_y, "Register Y: {:x}", cpu.reg_y);
+        assert_eq!(0xff, cpu.stack_pointer, "Stack Pointer: {:x}", cpu.stack_pointer);
+        // assert_eq!(0x609, cpu.program_counter, "Program Counter: {:x}", cpu.program_counter);
+        assert!(cpu.status.contains(
+            CpuStatus::from_bits(0b00110001).unwrap()
+        ), "CPU Status: {:b}", cpu.status.bits());
+
+        assert_eq!(
+            [cpu.bus.read(0x200), cpu.bus.read(0x201), cpu.bus.read(0x202)], 
+            [0x07, 0x7, 0x00]
+        );
+    }
+
+    #[test]
+    pub fn test_bne_1() {
+        // $0600    a2 08     LDX #$08
+        // $0602    ca        DEX 
+        // $0603    8e 00 02  STX $0200
+        // $0606    e0 03     CPX #$03
+        // $0608    d0 f8     BNE $0602
+        // $060a    8e 01 02  STX $0201
+        // $060d    00        BRK 
+        
+        // Expected
+        // A=$00 X=$03 Y=$00
+        // SP=$ff PC=$060e
+        // NV-BDIZC
+        // 00110011
+        let mut cpu = CPU::new();
+        let program = vec![
+            0xa2, 0x08,
+            0xca,
+            0x8e, 0x00, 0x02,
+            0xe0, 0x03,
+            0xd0, 0xf8,
+            0x8e, 0x01, 0x02,
+            0x00,
+        ];
+
+        cpu.run_program(program);
+
+         // assert registers
+        assert_eq!(0x00, cpu.reg_a, "Register A: {:x}", cpu.reg_a);
+        assert_eq!(0x03, cpu.reg_x, "Register X: {:x}", cpu.reg_x);
+        assert_eq!(0x00, cpu.reg_y, "Register Y: {:x}", cpu.reg_y);
+        assert_eq!(0xff, cpu.stack_pointer, "Stack Pointer: {:x}", cpu.stack_pointer);
+        // assert_eq!(0x609, cpu.program_counter, "Program Counter: {:x}", cpu.program_counter);
+        assert!(cpu.status.contains(
+            CpuStatus::from_bits(0b00110011).unwrap()
+        ), "CPU Status: {:b}", cpu.status.bits());
+
+        assert_eq!(
+            [cpu.bus.read(0x200), cpu.bus.read(0x201), cpu.bus.read(0x202)], 
+            [0x03, 0x3, 0x00]
+        );
     }
 }

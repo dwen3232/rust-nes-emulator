@@ -21,6 +21,7 @@ const CART_END: u16 = 0xFFFF;
 const RAM_MASK: u16 = (0b1 << 11) -1;
 const PPU_MASK: u16 = (0b1 << 3) - 1;
 
+#[derive(Debug)]
 pub struct Bus {
     ram: [u8; 0x800],   // 2KB RAM
     ppu_reg: [u8; 8],   // 8 PPU registers
@@ -78,7 +79,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_all_index_valid() {
+    fn test_all_ram_index_valid() {
         let mut mem = Bus::new();
         // populate with some data
         for i in 0..0x800u16 {
