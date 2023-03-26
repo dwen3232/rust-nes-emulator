@@ -11,6 +11,8 @@
 // $8000–$FFFF = Usual ROM, commonly with Mapper Registers (see MMC1 and UxROM for example)
 // UxROM Ref: https://www.nesdev.org/wiki/UxROM
 
+use std::fs::{self, File, read};
+
 const HEADER_TAG: [u8; 4] = [0x4E, 0x45, 0x53, 0x1A];
 const PRG_ROM_PAGE_SIZE: usize = 16384; // 16 KB page size
 const CHR_ROM_PAGE_SIZE: usize = 8192;  // 8 KB page size
@@ -37,7 +39,7 @@ pub enum Mirroring {
 pub struct ROM {
     mirroring: Mirroring,
     mapper: u8,
-    prg_rom: Vec<u8>,
+    pub prg_rom: Vec<u8>,
     chr_rom: Vec<u8>,
 }
 
@@ -51,6 +53,13 @@ impl ROM {
             chr_rom: vec![0; CHR_ROM_PAGE_SIZE],
         }
     }
+
+    pub fn create_from_nes(path: &str) -> Result<Self, String> {
+        // Creates a ROM with data loaded from a .nes file
+        let program = read(path).expect("Path does not exist");
+        Self::new(program)
+    }
+
     pub fn new(raw: Vec<u8>) -> Result<Self, String>{
         // First, decode the header
         // ~~~HEADER FORMAT:
@@ -70,7 +79,7 @@ impl ROM {
         }
         let prg_rom_size = PRG_ROM_PAGE_SIZE * (raw[4] as usize);
         let chr_rom_size = CHR_ROM_PAGE_SIZE * (raw[5] as usize);
-
+        println!{"Found prg_rom_size of {:x}, or {} pages", prg_rom_size, raw[4]}
         // ~~FLAG 6:
         // 76543210
         // ||||||||
@@ -124,11 +133,6 @@ impl ROM {
         })
     }
 
-    pub fn read_prg(&self, index: u16) -> u8 {
-        // If prg_rom is larger than 16 KB, we need to mirror it, using this temporary logic for now 
-        // TODO check this logic later
-        self.prg_rom[(index % 0x4000) as usize] // has the effect of only using first 14 bits
-    }
 }
 
 // Got these test cases from bugzmanov's blog

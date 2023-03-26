@@ -38,6 +38,7 @@ const PPU_MASK: u16 = (0b1 << 3) - 1;
 pub struct Bus {
     ram: [u8; 0x800],   // 2KB RAM
     ppu_reg: [u8; 8],   // 8 PPU registers
+    apuio_reg: [u8; 0x20],
     cartridge: ROM,
 }
 
@@ -48,6 +49,7 @@ impl Bus {
             ram: [0; 0x800],
             ppu_reg: [0; 8],
             cartridge: ROM::new_empty(),
+            apuio_reg: [0; 0x20],
         }
     }
 
@@ -56,7 +58,12 @@ impl Bus {
             ram: [0; 0x800],
             ppu_reg: [0; 8],
             cartridge: cartridge,
+            apuio_reg: [0; 0x20],
         }
+    }
+
+    pub fn load_nes(&mut self, path: &str) {
+        self.cartridge = ROM::create_from_nes(path).expect("Path does not exist");
     }
 
     pub fn write_byte(&mut self, index: u16, value: u8) {
@@ -68,7 +75,8 @@ impl Bus {
                 self.ram[(index & PPU_MASK) as usize] = value
             },
             APUIO_START ..= APUIO_END => {
-                todo!("Not implemented")
+                let mut index = index - APUIO_START;
+                self.apuio_reg[index as usize] = value;
             },
             CART_START ..= CART_END => {
                 panic!("Attempted write to read only memory, address {:x}", index);
@@ -85,11 +93,16 @@ impl Bus {
                 self.ram[(index & PPU_MASK) as usize]
             },
             APUIO_START ..= APUIO_END => {
-                todo!("APU/IO Not implemented")
+                let mut index = index - APUIO_START;
+                self.apuio_reg[index as usize]
             },
             PRG_ROM_START ..= PRG_ROM_END => {
-                let index = index - PRG_ROM_START;
-                self.cartridge.read_prg(index)
+                let mut index = index - PRG_ROM_START;
+                if self.cartridge.prg_rom.len() == 0x4000 && index >= 0x4000 {
+                    //mirror if needed
+                    index = index % 0x4000;
+                }
+                self.cartridge.prg_rom[index as usize]
             },
             _ => panic!("Cannot read from {:x}", index)
         }

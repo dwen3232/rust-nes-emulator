@@ -2,11 +2,12 @@
 
 
 use core::panic;
-use std::{ops::Add, slice::Iter, fmt::Display};
+use std::{ops::Add, slice::Iter, fmt::{Display, self}};
 use crate::bus::Bus;
 
 use bitflags::bitflags;
-use log::info;
+
+use simple_logging::log_to_file;
 
 pub trait Memory {
     // Trait for byte addressability using 2-byte addresses
@@ -56,11 +57,22 @@ pub enum AddressingMode {
     IndirectY,          
 }
 
-#[derive(Debug)]
+// #[derive(Debug)]
 pub enum Param {    // used by an instruction
     Value(u8),
     Address(u16),
 }
+
+impl fmt::Debug for Param {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Param::Value(val) => write!(f, "Value(0x{:x})", val),
+            Param::Address(addr) =>   write!(f, "Address(0x{:x})", addr),
+        }
+    }
+}
+
+
 // NOTE: all cpu opcodes are a single u8 of the form AAABBBCC in binary, BBB defines the addressing mode
 
 bitflags! {
@@ -88,8 +100,8 @@ pub struct CPU {
     pub reg_y: u8,
     // Special purpose registers
     status: CpuStatus,
-    stack_pointer: u8,
-    program_counter: u16,
+    pub stack_pointer: u8,
+    pub program_counter: u16,
 
     // Bus
     bus: Bus,
@@ -497,7 +509,25 @@ impl CPU {  // Public functions
         self.reg_y = 0;
         self.stack_pointer = STACK_POINTER_INIT;
         self.status = CpuStatus::ALWAYS | CpuStatus::BRK;
-        self.program_counter = self.read_two_bytes(0xFFFC);
+        self.program_counter = self.read_two_bytes(0xFFFC) - 4; // TEST: trying out subtracting one
+    }
+
+    pub fn load_nes(&mut self, path: &str) {
+        self.bus.load_nes(path);
+    }
+
+    pub fn run_nes(&mut self, path: &str) -> Result<(), String>  {
+        self.run_nes_with_callback(path, |_| {})
+    }
+
+    pub fn run_nes_with_callback<F>(&mut self, path: &str, mut callback: F) -> Result<(), String> 
+    where
+        F: FnMut(&mut CPU)
+    {
+        self.load_nes(path);
+        self.reset();
+        println!("Program Counter after reset: {:x}", self.program_counter);
+        self.run_with_callback(callback)
     }
 
     pub fn load_program(&mut self, program: Vec<u8>) {
@@ -511,7 +541,7 @@ impl CPU {  // Public functions
         self.run_program_with_callback(program, |_| {})
     }
 
-    pub fn run_program_with_callback<F>(&mut self, program: Vec<u8>, callback: F) -> Result<(), String>
+    pub fn run_program_with_callback<F>(&mut self, program: Vec<u8>, mut callback: F) -> Result<(), String>
     where
         F: FnMut(&mut CPU)
     {
@@ -534,12 +564,14 @@ impl CPU {  // Public functions
         loop {
             // 0. Execute callback
             callback(self);
+
+            println!("Program Counter: {:x}", self.program_counter);
             // 1. Read opcode and decode it to an instruction, always takes 1 cycle
             let opcode_raw = self.read_byte_from_pc();
             let (instruction, addressing_mode) = self.decode_opcode(opcode_raw);
 
             // TEMPORARY: if BRK, then exit
-            println!("Instruction, Mode: {:?}, {:?}", instruction, addressing_mode);
+            // println!("Instruction, Mode: {:?}, {:?}", instruction, addressing_mode);
             if instruction == Instruction::BRK {
                 return Ok(())
             }
@@ -547,8 +579,9 @@ impl CPU {  // Public functions
             // 2. Read some number of bytes depending on what the addressing mode is and decode the instruction parameter, may take many cycles
             // Ref: http://www.6502.org/tutorials/6502opcodes.html
             let parameter = self.read_arg(&addressing_mode);
-            println!("Parameter: {:?}", parameter);
-
+            // println!("Parameter: {:?}", parameter);
+            println!("{:?}, {:?}, {:?}", instruction, addressing_mode, parameter);
+            
             // 3. Execute the instruction
             self.execute_instruction(instruction, parameter);
         }
@@ -996,6 +1029,11 @@ impl Memory for CPU {
     }
 }
 impl CPU {  // helper functions
+
+    pub fn get_status(&self) -> u8 {
+        self.status.bits()
+    }
+
     fn read_byte_from_pc(&mut self) -> u8 {
         let read_addr = self.program_counter;
         self.program_counter += 1;
