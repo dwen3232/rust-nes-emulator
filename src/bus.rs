@@ -45,12 +45,7 @@ pub struct Bus {
 
 impl Bus {
     pub fn new_empty() -> Self {
-        Bus {
-            ram: [0; 0x800],
-            ppu_reg: [0; 8],
-            cartridge: ROM::new_empty(),
-            apuio_reg: [0; 0x20],
-        }
+        Bus::new(ROM::new_empty())
     }
 
     pub fn new(cartridge: ROM) -> Self {

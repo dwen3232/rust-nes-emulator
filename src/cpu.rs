@@ -23,7 +23,7 @@ pub trait Memory {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, )]
 pub enum Instruction { // Reorder these at some point to something more logical
     ADC, AND, ASL, BIT,
     // Branching instructions
@@ -76,8 +76,8 @@ impl fmt::Debug for Param {
 // NOTE: all cpu opcodes are a single u8 of the form AAABBBCC in binary, BBB defines the addressing mode
 
 bitflags! {
-    #[derive(Debug)]
-    struct CpuStatus: u8 {
+    #[derive(Debug, Clone)]
+    pub struct CpuStatus: u8 {
         const CARRY =       0b0000_0001;
         const ZERO =        0b0000_0010;
         const INT_DISABLE = 0b0000_0100;
@@ -99,7 +99,7 @@ pub struct CPU {
     pub reg_x: u8,
     pub reg_y: u8,
     // Special purpose registers
-    status: CpuStatus,
+    pub status: CpuStatus,
     pub stack_pointer: u8,
     pub program_counter: u16,
 
@@ -108,7 +108,7 @@ pub struct CPU {
 }
 
 impl CPU {
-    fn decode_opcode(&self, opcode: u8) -> (Instruction, AddressingMode) {
+    pub fn decode_opcode(&self, opcode: u8) -> (Instruction, AddressingMode) {
         // Used this reference for decoding opcodes to instruction addressing mode pairs
         // Ref: http://www.6502.org/tutorials/6502opcodes.html#LDA
         let result = match opcode {
@@ -419,7 +419,7 @@ impl CPU {
         result
     }
 
-    fn read_arg(&mut self, mode: &AddressingMode) -> Option<Param> {
+    pub fn read_arg(&mut self, mode: &AddressingMode) -> Option<Param> {
         // Based on the addressing mode, read `n` number of argument bytes from the program and process it into a parameter
         // to be used by some instruction
         match mode {
@@ -491,15 +491,20 @@ impl CPU {
 }
 
 impl CPU {  // Public functions
-    pub fn new() -> Self {
+    pub fn new_empty() -> Self {
+        CPU::new(Bus::new_empty())
+    }
+
+    pub fn new(bus: Bus) -> Self {
         CPU {
             reg_a: 0,
             reg_x: 0,
             reg_y: 0,
-            status: CpuStatus::ALWAYS | CpuStatus::BRK,
+            // status: CpuStatus::ALWAYS | CpuStatus::BRK,
+            status: CpuStatus::ALWAYS | CpuStatus::INT_DISABLE,
             stack_pointer: STACK_POINTER_INIT,      // probably needs to initialize to something else
             program_counter: PROGRAM_COUNTER_INIT,      // same here
-            bus: Bus::new_empty(),  // TODO: change this
+            bus: bus,
         }
     }
 
@@ -508,7 +513,8 @@ impl CPU {  // Public functions
         self.reg_x = 0;
         self.reg_y = 0;
         self.stack_pointer = STACK_POINTER_INIT;
-        self.status = CpuStatus::ALWAYS | CpuStatus::BRK;
+        // self.status = CpuStatus::ALWAYS | CpuStatus::BRK;
+        self.status = CpuStatus::ALWAYS | CpuStatus::INT_DISABLE;
         self.program_counter = self.read_two_bytes(0xFFFC) - 4; // TEST: trying out subtracting one
     }
 
@@ -565,13 +571,11 @@ impl CPU {  // Public functions
             // 0. Execute callback
             callback(self);
 
-            println!("Program Counter: {:x}", self.program_counter);
             // 1. Read opcode and decode it to an instruction, always takes 1 cycle
             let opcode_raw = self.read_byte_from_pc();
             let (instruction, addressing_mode) = self.decode_opcode(opcode_raw);
 
             // TEMPORARY: if BRK, then exit
-            // println!("Instruction, Mode: {:?}, {:?}", instruction, addressing_mode);
             if instruction == Instruction::BRK {
                 return Ok(())
             }
@@ -579,8 +583,6 @@ impl CPU {  // Public functions
             // 2. Read some number of bytes depending on what the addressing mode is and decode the instruction parameter, may take many cycles
             // Ref: http://www.6502.org/tutorials/6502opcodes.html
             let parameter = self.read_arg(&addressing_mode);
-            // println!("Parameter: {:?}", parameter);
-            println!("{:?}, {:?}, {:?}", instruction, addressing_mode, parameter);
             
             // 3. Execute the instruction
             self.execute_instruction(instruction, parameter);
@@ -1034,7 +1036,7 @@ impl CPU {  // helper functions
         self.status.bits()
     }
 
-    fn read_byte_from_pc(&mut self) -> u8 {
+    pub fn read_byte_from_pc(&mut self) -> u8 {
         let read_addr = self.program_counter;
         self.program_counter += 1;
         self.read_byte(read_addr)
@@ -1344,12 +1346,14 @@ impl CPU {  // implement specific ISA instructions
 
     fn jsr(&mut self, address: u16) {
         // Affects Flags: None
-        let address = address - 1;
-        let lsb = address as u8;
-        let msb = (address >> 8) as u8;
+        let program_counter = self.program_counter - 1;
+        let lsb = program_counter as u8;
+        let msb = (program_counter >> 8) as u8;
         // Push msb first
         self.push_to_stack(msb);
         self.push_to_stack(lsb);
+
+        self.program_counter = address;
     }
 
     fn lda(&mut self, parameter: u8) {
@@ -1544,14 +1548,18 @@ impl CPU {  // implement specific ISA instructions
 
     fn php(&mut self) {
         // Affects Flags: None
-        self.push_to_stack(self.status.bits());
+        // Need to push 'status' with BRK set
+        // https://www.nesdev.org/wiki/Status_flags#The_B_flag
+        let status = self.status.clone() | CpuStatus::BRK;
+        self.push_to_stack(status.bits());
     }
 
     fn plp(&mut self) {
         // Affects Flags: All
         self.status = CpuStatus::from_bits(self.pop_from_stack()).unwrap();
-        // plp ALWAYS sets BRK flag
-        self.status.insert(CpuStatus::BRK);
+        // plp discards BRK flag
+        // https://www.nesdev.org/wiki/Status_flags#The_B_flag
+        self.status.remove(CpuStatus::BRK);
     }
 
     fn sta(&mut self, address: u16) {
@@ -1589,7 +1597,7 @@ mod tests {
         // SP=$ff PC=$0613
         // NV-BDIZC
         // 00110000
-        let mut cpu = CPU::new();
+        let mut cpu = CPU::new_empty();
         let program = vec![
             0xA9, 0x01, 
             0x8D, 0x00, 0x02,
@@ -1626,7 +1634,7 @@ mod tests {
         // SP=$ff PC=$060a
         // NV-BDIZC
         // 10110001
-        let mut cpu = CPU::new();
+        let mut cpu = CPU::new_empty();
         let program = vec![
             0xA9, 0xC0,
             0xAA,
@@ -1659,7 +1667,7 @@ mod tests {
         // NV-BDIZC
         // 11110000
 
-        let mut cpu = CPU::new();
+        let mut cpu = CPU::new_empty();
         let program = vec![
             0x18,
             0xA9, 0x7f,
@@ -1690,7 +1698,7 @@ mod tests {
         // SP=$ff PC=$0600
         // NV-BDIZC
         // 00110000
-        let mut cpu = CPU::new();
+        let mut cpu = CPU::new_empty();
         let program = vec![
             0xa2, 0x08,
             0xca,
@@ -1732,7 +1740,7 @@ mod tests {
         // SP=$ff PC=$060e
         // NV-BDIZC
         // 00110011
-        let mut cpu = CPU::new();
+        let mut cpu = CPU::new_empty();
         let program = vec![
             0xa2, 0x08,
             0xca,
