@@ -1,4 +1,5 @@
  - Implement unofficial opcodes (will be painful)
     - Started work on debugging, very painful indeed
+    - Right now, have issues with PLP
  - Figure out what the true starting status should be (different sources say different things)
  - Implement PPU

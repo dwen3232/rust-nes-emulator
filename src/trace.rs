@@ -1,9 +1,21 @@
 use std::ops::Add;
 
-use crate::{cpu::{CPU, AddressingMode, Memory, Param}, cartridge::test::test_rom, bus::Bus};
+use crate::{cpu::{CPU, AddressingMode, Memory, Param, Instruction}, cartridge::test::test_rom, bus::Bus};
 
 pub fn trace_cpu(cpu: &mut CPU) -> String {
     let prev_counter = cpu.program_counter;
+
+    // SOME TEMP STUFF FOR DEBUGGING:
+    // if prev_counter == 0xCFDB {
+    //     println!("Found {:04x} at 0x0080", cpu.read_byte(0x0080));
+    // }
+    // if prev_counter == 0xCFF2 {
+    //     println!("Found {:04x} at 0x00FF", cpu.read_byte(0x00FF));
+    //     println!("Found {:04x} at 0x0000", cpu.read_byte(0x0000));
+    //     println!("Found {:04x} at 0x0400", cpu.read_byte(0x0400));
+    //     println!("Found {:04x} at 0x0080", cpu.read_byte(0x0080));
+    // }
+
     // decode instruction and addressing mode
     let opcode = cpu.read_byte_from_pc();
     let (instruction, addressing_mode) = cpu.decode_opcode(opcode);
@@ -41,45 +53,45 @@ pub fn trace_cpu(cpu: &mut CPU) -> String {
     };
 
     // create temp string for operand details
-    let tmp = match (addressing_mode, param) {
+    let tmp = match (&instruction, addressing_mode, param) {
         // length 1
-        (AddressingMode::Implicit, _) => String::from(""),
-        (AddressingMode::Accumulator, _) => {
-            format!(" A")
+        (_, AddressingMode::Implicit, _) => String::from(""),
+        (_, AddressingMode::Accumulator, _) => {
+            format!("A")
         },
         // length 2
-        (AddressingMode::Immediate, Some(Param::Value(value))) => {
+        (_, AddressingMode::Immediate, Some(Param::Value(value))) => {
             format!("#${:02x}", value)
         },
-        (AddressingMode::ZeroPage, Some(Param::Address(address))) => {
+        (_, AddressingMode::ZeroPage, Some(Param::Address(address))) => {
             let stored_value = cpu.read_byte(address);
             format!("${:02x} = {:02x}", address, stored_value)
         },
-        (AddressingMode::ZeroPageIndexX, Some(Param::Address(address))) => {
+        (_, AddressingMode::ZeroPageIndexX, Some(Param::Address(address))) => {
             let stored_value = cpu.read_byte(address);
             format!(
                 "${:02x},X @ {:02x} = {:02x}",
                 arg, address, stored_value
             )
         },
-        (AddressingMode::ZeroPageIndexY, Some(Param::Address(address))) => {
+        (_, AddressingMode::ZeroPageIndexY, Some(Param::Address(address))) => {
             let stored_value = cpu.read_byte(address);
             format!(
                 "${:02x},Y @ {:02x} = {:02x}",
                 arg, address, stored_value
             )
         },
-        (AddressingMode::IndirectX, Some(Param::Address(address))) => {
+        (_, AddressingMode::IndirectX, Some(Param::Address(address))) => {
             let stored_value = cpu.read_byte(address);
             format!(
                 "(${:02x},X) @ {:02x} = {:04x} = {:02x}",
                 arg,
-                (address.wrapping_add(cpu.reg_x as u16)),
+                (arg.wrapping_add(cpu.reg_x as u16) as u8),
                 address,
                 stored_value
             )
         },
-        (AddressingMode::IndirectY, Some(Param::Address(address))) => {
+        (_, AddressingMode::IndirectY, Some(Param::Address(address))) => {
             let stored_value = cpu.read_byte(address);
             format!(
                 "(${:02x}),Y = {:04x} @ {:04x} = {:02x}",
@@ -89,37 +101,44 @@ pub fn trace_cpu(cpu: &mut CPU) -> String {
                 stored_value
             )
         },
-        (AddressingMode::Relative, _) => {
+        (_, AddressingMode::Relative, _) => {
             let address: usize =
             (prev_counter as usize + 2).wrapping_add((arg as i8) as usize);
             format!("${:04x}", address)
         },
         // length 3
-        (AddressingMode::IndirectJump, Some(Param::Address(address))) => {
+        (_, AddressingMode::IndirectJump, Some(Param::Address(address))) => {
             format!("(${:04x}) = {:04x}", arg, address)
         },
-        (AddressingMode::AbsoluteJump, Some(Param::Address(address))) => {
+        (_, AddressingMode::AbsoluteJump, Some(Param::Address(address))) => {
             format!("${:04x}", address)
         },
-        (AddressingMode::Absolute, Some(Param::Address(address))) => {
+        // Special cases for Absolute
+        (Instruction::BCC | Instruction::BCS | Instruction::BEQ | Instruction::BMI | Instruction::BNE | 
+         Instruction::JSR,
+            AddressingMode::Absolute, Some(Param::Address(address))) => {
             format!("${:04x}", address)
         },
-        (AddressingMode::AbsoluteIndexX, Some(Param::Address(address))) => {
+        (_, AddressingMode::Absolute, Some(Param::Address(address))) => {
+            let stored_value = cpu.read_byte(address);
+            format!("${:04x} = {:02x}", address, stored_value)
+        },
+        (_, AddressingMode::AbsoluteIndexX, Some(Param::Address(address))) => {
             let stored_value = cpu.read_byte(address);
             format!(
                 "${:04x},X @ {:04x} = {:02x}",
                 arg, address, stored_value
             )
         },
-        (AddressingMode::AbsoluteIndexY, Some(Param::Address(address))) => {
+        (_, AddressingMode::AbsoluteIndexY, Some(Param::Address(address))) => {
             let stored_value = cpu.read_byte(address);
             format!(
                 "${:04x},Y @ {:04x} = {:02x}",
                 arg, address, stored_value
             )
         },
-        (mode, param) => {
-            panic!("Could not trace this argument {:?}, {:?}", mode, param)
+        (instruction, mode, param) => {
+            panic!("Could not trace this argument {:?}, {:?}, {:?}", instruction, mode, param)
         }    
     };
 

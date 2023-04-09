@@ -21,6 +21,14 @@ pub trait Memory {
         let two_bytes = (msb << 8) + lsb;
         two_bytes
     }
+
+    fn read_two_page_bytes(&mut self, index: u16) -> u16 {
+        // same as read_two_bytes, but we loop back on the page boundary
+        let lsb = self.read_byte(index) as u16;
+        let msb = self.read_byte((index as u8).wrapping_add(1) as u16) as u16;
+        let two_bytes = (msb << 8) + lsb;
+        two_bytes
+    }
 }
 
 #[derive(Debug, PartialEq, )]
@@ -431,10 +439,25 @@ impl CPU {
                 Some(Param::Value(self.read_byte_from_pc()))
             },
             AddressingMode::IndirectJump => {
+                // 6502 has a edge case with page boundary when performing indirect jumps
+                // AN INDIRECT JUMP MUST NEVER USE A VECTOR BEGINNING ON THE LAST BYTE OF A PAGE
+                // http://www.6502.org/tutorials/6502opcodes.html#JMP
+
+                // if address $3000 contains $40, $30FF contains $80, and $3100 contains $50, 
+                // the result of JMP ($30FF) will be a transfer of control to $4080 rather than $5080 as you intended 
+                // i.e. the 6502 took the low byte of the address from $30FF and the high byte from $3000.
+
                 // first read two bytes
                 let mem_addr = self.read_two_bytes_from_pc();
+
                 // read the two bytes from memory and form it into a mem addr
-                let mem_addr = self.read_two_bytes(mem_addr);
+                let mem_addr = if mem_addr & 0x0FF == 0x0FF {
+                    let lsb = self.read_byte(mem_addr) as u16;
+                    let msb = self.read_byte(mem_addr & 0xFF00) as u16;
+                    (msb << 8) + lsb
+                } else {
+                    self.read_two_bytes(mem_addr)
+                };
                 // now read from memory
                 Some(Param::Address(mem_addr))
             },
@@ -476,14 +499,15 @@ impl CPU {
                 // Form <instruction (<addr>, X), where <addr> is u8
                 let zero_page_addr = (self.read_byte_from_pc().wrapping_add(self.reg_x)) as u16;
                 // TODO: may need to re-evaluate how this is done when there's a page cross
-                let indirect = self.read_two_bytes(zero_page_addr);
+                let indirect = self.read_two_page_bytes(zero_page_addr);
                 // read memory from bus
                 Some(Param::Address(indirect))
             },
             AddressingMode::IndirectY => {
                 let zero_page_addr = self.read_byte_from_pc() as u16;
                 // TODO: may need to re-evaluate how this is done when there's a page cross
-                let indirect = self.read_two_bytes(zero_page_addr);
+                let indirect = self.read_two_page_bytes(zero_page_addr)
+                                        .wrapping_add(self.reg_y as u16);
                 Some(Param::Address(indirect))
             },
         }
@@ -613,9 +637,9 @@ impl CPU {  // Public functions
             Instruction::ASL => {
                 match parameter {
                     Some(Param::Value(val)) => 
-                        self.asl(val),
+                        self.asl_acc(val),
                     Some(Param::Address(mem_addr)) => 
-                        self.asl(self.read_byte(mem_addr)),
+                        self.asl(mem_addr),
                     _ => panic!("Invalid parameter"),
                 }
             },
@@ -834,10 +858,11 @@ impl CPU {  // Public functions
             },
             Instruction::LSR => {
                 match parameter {
+                    // This should only ever be used for accumulator addressing mode
                     Some(Param::Value(val)) => 
-                        self.lsr(val),
+                        self.lsr_acc(val),
                     Some(Param::Address(mem_addr)) => 
-                        self.lsr(self.read_byte(mem_addr)),
+                        self.lsr(mem_addr),
                     _ => panic!("Invalid parameter"),
                 }
             },
@@ -913,18 +938,18 @@ impl CPU {  // Public functions
             Instruction::ROL => {
                 match parameter {
                     Some(Param::Value(val)) => 
-                        self.rol(val),
+                        self.rol_acc(val),
                     Some(Param::Address(mem_addr)) => 
-                        self.rol(self.read_byte(mem_addr)),
+                        self.rol(mem_addr),
                     _ => panic!("Invalid parameter"),
                 }
             },
             Instruction::ROR => {
                 match parameter {
                     Some(Param::Value(val)) => 
-                        self.ror(val),
+                        self.ror_acc(val),
                     Some(Param::Address(mem_addr)) => 
-                        self.ror(self.read_byte(mem_addr)),
+                        self.ror(mem_addr),
                     _ => panic!("Invalid parameter"),
                 }
             },
@@ -962,7 +987,7 @@ impl CPU {  // Public functions
             Instruction::TSX => {
                 match parameter {
                     None => 
-                        self.txs(),
+                        self.tsx(),
                     _ => panic!("Invalid parameter"),
                 }
             },
@@ -1129,7 +1154,7 @@ impl CPU {  // implement specific ISA instructions
         self.set_zero_flag(self.reg_a);
     }
 
-    fn asl(&mut self, parameter: u8) {
+    fn asl_acc(&mut self, parameter: u8) {
         // Affects Flags: N Z C
 
         let result = (parameter as u16) << 1;
@@ -1140,18 +1165,23 @@ impl CPU {  // implement specific ISA instructions
         self.set_carry_flag(result);
     }
 
+    fn asl(&mut self, address: u16) {
+        // Affects Flags: N Z C
+        let parameter = self.read_byte(address);
+        let result = (parameter as u16) << 1;
+        self.write_byte(address, result as u8);
+
+        self.set_negative_flag(result as u8);
+        self.set_zero_flag(result as u8);
+        self.set_carry_flag(result);
+    }
+
     fn bit(&mut self, parameter: u8) {
         // Affects Flags: N V Z
         let result = self.reg_a & parameter;
 
         self.set_negative_flag(parameter); // neg if bit 7 in param is 1
-        
-        if result & 0b0100_0000 != 0 {
-            self.status.insert(CpuStatus::OVERFLOW);
-        } else {
-            self.status.remove(CpuStatus::OVERFLOW);
-        }
-
+        self.status.set(CpuStatus::OVERFLOW, parameter & 0b0100_0000 != 0); // overflow if bit 6 in param is 1
         self.set_zero_flag(result);
         
     }
@@ -1380,13 +1410,30 @@ impl CPU {  // implement specific ISA instructions
         self.set_zero_flag(self.reg_y);
     }
 
-    fn lsr(&mut self, parameter: u8) {
+    fn lsr_acc(&mut self, parameter: u8) {
         // Affects Flags: N Z C
-        // I think this writes to reg_a? Not sure
+        // LSR for accumulator
         self.reg_a = parameter >> 1;
 
         self.set_negative_flag(self.reg_a);
         self.set_zero_flag(self.reg_a);
+        // Special carry flag case
+        if parameter % 2 == 1 {
+            self.status.insert(CpuStatus::CARRY);
+        } else {
+            self.status.remove(CpuStatus::CARRY);
+        }
+    }
+
+    fn lsr(&mut self, address: u16) {
+        // Affects Flags: N Z C
+        // I think this writes to reg_a? Not sure
+        let parameter = self.read_byte(address);
+        let result = parameter >> 1;
+        self.write_byte(address, result);
+
+        self.set_negative_flag(result);
+        self.set_zero_flag(result);
         // Special carry flag case
         if parameter % 2 == 1 {
             self.status.insert(CpuStatus::CARRY);
@@ -1453,7 +1500,7 @@ impl CPU {  // implement specific ISA instructions
 
     fn dey(&mut self) {
         // Affects Flags: N Z
-        self.reg_y = self.reg_x.wrapping_sub(1);
+        self.reg_y = self.reg_y.wrapping_sub(1);
 
         self.set_negative_flag(self.reg_y);
         self.set_zero_flag(self.reg_y);
@@ -1461,13 +1508,13 @@ impl CPU {  // implement specific ISA instructions
 
     fn iny(&mut self) {
         // Affects Flags: N Z
-        self.reg_y = self.reg_x.wrapping_add(1);
+        self.reg_y = self.reg_y.wrapping_add(1);
 
         self.set_negative_flag(self.reg_y);
         self.set_zero_flag(self.reg_y);
     }
 
-    fn rol(&mut self, parameter: u8) {
+    fn rol_acc(&mut self, parameter: u8) {
         // Affects Flags: N Z C
         let mut result = (parameter as u16) << 1;
         if self.status.contains(CpuStatus::CARRY) {
@@ -1480,13 +1527,46 @@ impl CPU {  // implement specific ISA instructions
         self.set_carry_flag(result);
     }
 
-    fn ror(&mut self, parameter: u8) {
+    fn rol(&mut self, address: u16) {
+        // Affects Flags: N Z C
+        let parameter = self.read_byte(address);
+        let mut result = (parameter as u16) << 1;
+        if self.status.contains(CpuStatus::CARRY) {
+            result += 1;    // this should be safe from overflow
+        }
+        self.write_byte(address, result as u8);
+
+        self.set_negative_flag(result as u8);
+        self.set_zero_flag(result as u8);
+        self.set_carry_flag(result);
+    }
+
+    fn ror_acc(&mut self, parameter: u8) {
         // Affects Flags: N Z C
         let mut result = parameter >> 1;
         if self.status.contains(CpuStatus::CARRY) {
-            result += 0b1000_000;
+            result += 0b1000_0000;
         }
         self.reg_a = result;
+        
+        self.set_negative_flag(result);
+        self.set_zero_flag(result);
+        // Special carry flag case
+        if parameter % 2 == 1 {
+            self.status.insert(CpuStatus::CARRY);
+        } else {
+            self.status.remove(CpuStatus::CARRY);
+        }
+    }
+
+    fn ror(&mut self, address: u16) {
+        // Affects Flags: N Z C
+        let parameter = self.read_byte(address);
+        let mut result = parameter >> 1;
+        if self.status.contains(CpuStatus::CARRY) {
+            result += 0b1000_0000;
+        }
+        self.write_byte(address, result);
         
         self.set_negative_flag(result);
         self.set_zero_flag(result);
@@ -1560,6 +1640,7 @@ impl CPU {  // implement specific ISA instructions
         // plp discards BRK flag
         // https://www.nesdev.org/wiki/Status_flags#The_B_flag
         self.status.remove(CpuStatus::BRK);
+        self.status.insert(CpuStatus::ALWAYS);
     }
 
     fn sta(&mut self, address: u16) {
