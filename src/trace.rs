@@ -1,8 +1,18 @@
 use std::ops::Add;
 
-use crate::{cpu::{CPU, AddressingMode, Memory, Param, Instruction}, cartridge::test::test_rom, bus::Bus};
+use crate::{
+    cpu::{
+        CPU, Param,
+        decode::{
+            Instruction, AddressingMode, decode_opcode
+        },
+        bus::Bus
+    }, 
+    cartridge::test::test_rom,
+    traits::Memory
+};
 
-pub fn trace_cpu(cpu: &mut CPU) -> String {
+pub fn trace_cpu(cpu: &mut CPU) -> Result<String, String> {
     let prev_counter = cpu.program_counter;
 
     // SOME TEMP STUFF FOR DEBUGGING:
@@ -18,7 +28,7 @@ pub fn trace_cpu(cpu: &mut CPU) -> String {
 
     // decode instruction and addressing mode
     let opcode = cpu.read_byte_from_pc();
-    let (instruction, addressing_mode) = cpu.decode_opcode(opcode);
+    let (instruction, addressing_mode) = decode_opcode(opcode)?;
 
     // parse instruction parameter 
     let param = cpu.read_arg(&addressing_mode);
@@ -113,12 +123,6 @@ pub fn trace_cpu(cpu: &mut CPU) -> String {
         (_, AddressingMode::AbsoluteJump, Some(Param::Address(address))) => {
             format!("${:04x}", address)
         },
-        // Special cases for Absolute
-        (Instruction::BCC | Instruction::BCS | Instruction::BEQ | Instruction::BMI | Instruction::BNE | 
-         Instruction::JSR,
-            AddressingMode::Absolute, Some(Param::Address(address))) => {
-            format!("${:04x}", address)
-        },
         (_, AddressingMode::Absolute, Some(Param::Address(address))) => {
             let stored_value = cpu.read_byte(address);
             format!("${:04x} = {:02x}", address, stored_value)
@@ -153,11 +157,13 @@ pub fn trace_cpu(cpu: &mut CPU) -> String {
         .trim()
         .to_string();
 
-    format!(
+    let trace = format!(
         "{:47} A:{:02x} X:{:02x} Y:{:02x} P:{:02x} SP:{:02x}",
         asm_str, cpu.reg_a, cpu.reg_x, cpu.reg_y, cpu.status, cpu.stack_pointer,
     )
-    .to_ascii_uppercase()
+    .to_ascii_uppercase();
+
+    Ok(trace)
 }
 
 
@@ -177,7 +183,9 @@ fn test_format_trace_cpu() {
     cpu.reg_y = 3;
     let mut result: Vec<String> = vec![];
     cpu.run_with_callback(|cpu| {
-        result.push(trace_cpu(cpu));
+        if let Ok(s) = trace_cpu(cpu) {
+            result.push(s);
+        }
     });
     assert_eq!(
         "0064  A2 01     LDX #$01                        A:01 X:02 Y:03 P:24 SP:FD",
@@ -213,7 +221,9 @@ fn test_format_mem_access() {
     cpu.reg_y = 0;
     let mut result: Vec<String> = vec![];
     cpu.run_with_callback(|cpu| {
-        result.push(trace_cpu(cpu));
+        if let Ok(s) = trace_cpu(cpu) {
+            result.push(s);
+        }
     });
     assert_eq!(
         "0064  11 33     ORA ($33),Y = 0400 @ 0400 = AA  A:00 X:00 Y:00 P:24 SP:FD",

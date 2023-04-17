@@ -1,6 +1,7 @@
-#![allow(dead_code, unused)]
+#![allow(dead_code, unused, unused_imports)]
 
 pub mod cpu;
-pub mod bus;
+pub mod ppu;
 pub mod cartridge;
 pub mod trace;
+pub mod traits;
