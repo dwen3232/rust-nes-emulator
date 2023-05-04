@@ -1,5 +1,18 @@
-use bitflags::bitflags;
+mod registers;
+use core::panic;
 
+use registers::{
+    PpuControl,
+    PpuMask,
+    PpuStatus,
+    OamAddr,
+    OamData,
+    PpuScroll,
+    PpuAddr
+};
+
+use super::traits::Memory;
+use super::cartridge::Mirroring;
 
 
 // PPUCTRL	$2000	VPHB SINN	NMI enable (V), PPU master/slave (P), sprite height (H), background tile select (B), sprite tile select (S), increment mode (I), nametable select (NN)
@@ -12,252 +25,347 @@ use bitflags::bitflags;
 // PPUDATA	$2007	dddd dddd	PPU data read/write
 // OAMDMA	$4014	aaaa aaaa	OAM DMA high address
 
+// OAM data, 64 sprites each occupying 4 bytes, so 256 bytes in total
 #[derive(Debug)]
-struct PPU {
+pub struct PPU {
+    pub chr_rom: Vec<u8>,
+    pub vram: [u8; 0x800],
+    pub oam_data: [u8; 256],
+    // pub palette_table: [u8; 32],
+    // registers
     ppuctrl: PpuControl,
     ppumask: PpuMask,
     ppustatus:PpuStatus,
+    oamaddr: OamAddr,
+    // oamdata: OamData,
+    ppuscroll: PpuScroll,
+    ppuaddr: PpuAddr,
+    ppudata: u8,
+
+    pub mirroring: Mirroring,
+
+    // TODO: Can these be smaller?
+    cycle_counter: usize,
+    cur_scanline: usize, 
+
+    pub nmi_interrupt_signal: Option<()>,
 }
 
-// pub trait PPU {
-//     fn write_to_ctrl(&mut self, value: u8);
-//     fn write_to_mask(&mut self, value: u8);
-//     fn read_status(&mut self) -> u8; 
-//     fn write_to_oam_addr(&mut self, value: u8);
-//     fn write_to_oam_data(&mut self, value: u8);
-//     fn read_oam_data(&self) -> u8;
-//     fn write_to_scroll(&mut self, value: u8);
-//     fn write_to_ppu_addr(&mut self, value: u8);
-//     fn write_to_data(&mut self, value: u8);
-//     fn read_data(&mut self) -> u8;
-//     fn write_oam_dma(&mut self, value: &[u8; 256]);
-// }
 impl PPU {
-    fn write_to_ctrl(&mut self, data: u8) {
-
+    pub fn new(chr_rom: Vec<u8>, mirroring: Mirroring) -> Self {
+        PPU {
+            chr_rom: chr_rom,
+            vram: [0; 0x800],
+            oam_data: [0; 256],
+            ppuctrl: PpuControl::from_bits_retain(0),
+            ppumask: PpuMask::from_bits_retain(0),
+            ppustatus: PpuStatus::from_bits_retain(0),
+            oamaddr: OamAddr::new(),
+            ppuscroll: PpuScroll::new(),
+            ppuaddr: PpuAddr::new(),
+            ppudata: 0,
+            mirroring: mirroring,
+            cycle_counter: 0,
+            cur_scanline: 0,
+            nmi_interrupt_signal: None,
+        }
     }
 
-    fn write_to_mask(&mut self, data: u8) {
+    pub fn new_empty_chr_rom(mirroring: Mirroring) -> Self {
+        PPU::new(vec![0; 2048], mirroring)
+    }
+
+    pub fn write_ppuctrl(&mut self, data: u8) {
+        let prev_is_generate_nmi = self.ppuctrl.is_generate_nmi();
+        self.ppuctrl.write(data);
+        let is_vblank_started = self.ppustatus.is_vblank_started();
+        let cur_is_generate_nmi = self.ppuctrl.is_generate_nmi();
+        // Set NMI Interrupt signal if PPU is in VBLANK and GENERATE_NMI changes from 0 to 1
+        if !prev_is_generate_nmi && cur_is_generate_nmi && is_vblank_started {
+            self.nmi_interrupt_signal = Some(())
+        }
+    }
+
+    pub fn write_ppumask(&mut self, data: u8) {
+        self.ppumask.write(data);
+    }
+
+    pub fn read_ppustatus(&mut self) -> u8 {
+        let bits = self.ppustatus.bits();
+        self.ppustatus.remove(PpuStatus::VBLANK_STARTED);
+        self.ppuscroll.reset();
+        self.ppuaddr.reset();
+        bits
+    }
+
+    pub fn write_oamaddr(&mut self, data: u8) {
+        self.oamaddr.write(data);
+    }
+
+    pub fn write_oamdata(&mut self, data: u8) {
+        self.oam_data[self.oamaddr.read() as usize] = data;
+        self.oamaddr.increment();
+    }
+
+    pub fn write_oamdma(&mut self, data: &[u8; 256]) {
+        for byte in data.iter() {
+            self.oam_data[self.oamaddr.read() as usize] = *byte;
+            self.oamaddr.increment();
+        }
+    }
+
+    pub fn read_oamdata(&self) -> u8 {
+        self.oam_data[self.oamaddr.read() as usize]
+    }
+
+    pub fn write_ppuscroll(&mut self, data: u8) {
+        self.ppuscroll.write(data);
+    }
+
+    pub fn write_ppuaddr(&mut self, data: u8) {
+        self.ppuaddr.write(data);
+    }
+
+    pub fn read_ppudata(&mut self) -> u8 {
+        let addr = self.ppuaddr.read();
+        // Retrieve previous value in buffer
+        let result = self.ppudata;
+        // Store in ppudata as buffer
+        self.ppudata = self.read_byte(addr);
+        // Increment address
+        let inc_value = self.ppuctrl.get_vram_addr_inc_value();
+        self.ppuaddr.increment(inc_value);
+        return result;
+    }
+
+    pub fn write_ppudata(&mut self, data: u8) {
+        let addr = self.ppuaddr.read();
+        self.write_byte(addr, data);
+        // Increment address
+        let inc_value = self.ppuctrl.get_vram_addr_inc_value();
+        self.ppuaddr.increment(inc_value);
+    }
+
+    fn mirror_vram_addr(&self, addr: u16) -> u16 {
+        let vram_index = addr - 0x2000;
+        let nametable_index = vram_index / 0x400;
+
+        let mirror_nametable_index = match (&self.mirroring, nametable_index) {
+            (Mirroring::Horizontal, 0) => 0,
+            (Mirroring::Horizontal, 1) => 0,
+            (Mirroring::Horizontal, 2) => 1,
+            (Mirroring::Horizontal, 3) => 1,
+            (Mirroring::Vertical, 0) => 0,
+            (Mirroring::Vertical, 1) => 1,
+            (Mirroring::Vertical, 2) => 0,
+            (Mirroring::Vertical, 3) => 1,
+            _ => panic!("Unexpected mirroring, nametable_index pair")
+        };
+
+        let new_vram_index = (vram_index & 0b1111_0011_1111_1111) | (mirror_nametable_index << 10);
+        return new_vram_index
+    }
+
+    pub fn increment_cycle_counter(&mut self, cycles: u8) {
+        self.cycle_counter += cycles as usize;
+        // cycle_counter loops back to 0 at 341 and increments cur_scalenline
+        if self.cycle_counter < 341 {
+            return;
+        }
+        self.cycle_counter = self.cycle_counter - 341;
+        self.cur_scanline += 1;
+
+        if self.cur_scanline == 241 {
+            self.ppustatus.set_vblank_started(true);
+            self.ppustatus.set_sprite_zero_hit(false);
+            if self.ppuctrl.is_generate_nmi() {
+                self.nmi_interrupt_signal = Some(());
+            }
+        } else if self.cur_scanline >= 262 {
+            self.cur_scanline = 0;
+            self.nmi_interrupt_signal = None;
+            self.ppustatus.set_vblank_started(false);
+            self.ppustatus.set_sprite_zero_hit(false);
+        }
+    }
+
+}
+
+// $0000-$0FFF	$1000	Pattern table 0
+// $1000-$1FFF	$1000	Pattern table 1
+// $2000-$23FF	$0400	Nametable 0
+// $2400-$27FF	$0400	Nametable 1
+// $2800-$2BFF	$0400	Nametable 2
+// $2C00-$2FFF	$0400	Nametable 3
+// $3000-$3EFF	$0F00	Mirrors of $2000-$2EFF
+// $3F00-$3F1F	$0020	Palette RAM indexes
+// $3F20-$3FFF	$00E0	Mirrors of $3F00-$3F1F
+// TODO: maybe move this into a separate Bus struct?
+impl Memory for PPU {
+    fn read_byte(&mut self, index: u16) -> u8 {
+        match index {
+            0x0000..=0x1FFF => {
+                self.chr_rom[index as usize]
+            },
+            0x2000..=0x2FFF => {
+                let vram_index = self.mirror_vram_addr(index);
+                self.vram[vram_index as usize]
+            },
+            0x3000..=0x3EFF => {
+                // map to 0x2000...0x2EFF
+                let masked_index = index & 0b1110_1111_1111_1111;   
+                let vram_index = self.mirror_vram_addr(masked_index);
+                self.vram[vram_index as usize]
+            },
+            0x3F00..=0x3F1F => todo!(),
+            0x3F20..=0x3FFF => todo!(),
+            _ => panic!("Unexpected address")
+        }
+    }
+
+    fn write_byte(&mut self, index: u16, value: u8) {
+        match index {
+            0x0000..=0x1FFF => panic!("CHR_ROM is read only"),
+            0x2000..=0x2FFF => {
+                let vram_index = self.mirror_vram_addr(index);
+                self.vram[vram_index as usize] = value;
+            },
+            0x3000..=0x3EFF => {
+                // map to 0x2000...0x2EFF
+                let masked_index = index & 0b1110_1111_1111_1111;   
+                let vram_index = self.mirror_vram_addr(masked_index);
+                self.vram[vram_index as usize] = value;
+            },
+            0x3F00..=0x3F1F => todo!(),
+            0x3F20..=0x3FFF => todo!(),
+            _ => panic!("Unexpected address")
+        }
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_ppuaddr_write_ppudata_read() {
+        let mut ppu = PPU::new_empty_chr_rom(Mirroring::Horizontal);
+
+        // write 69 to 0x2001
+        ppu.vram[1] = 69;
+        // write 70 to 0x2002
+        ppu.vram[2] = 70;
+
+        ppu.write_ppuaddr(0x20);
+        ppu.write_ppuaddr(0x01);
+
+        ppu.read_ppudata();
+        assert_eq!(69, ppu.read_ppudata());
+        assert_eq!(70, ppu.read_ppudata());
+    }
+
+    #[test]
+    fn test_ppu_addr_write_ppudata_read_page_cross() {
+        let mut ppu = PPU::new_empty_chr_rom(Mirroring::Horizontal);
+
+        ppu.vram[0x01FF] = 69;
+        ppu.vram[0x0200] = 70;
+
+        ppu.write_ppuaddr(0x21);
+        ppu.write_ppuaddr(0xFF);
         
+        ppu.read_ppudata();
+        assert_eq!(69, ppu.read_ppudata());
+        assert_eq!(70, ppu.read_ppudata());
     }
 
-    fn read_status(&mut self) -> u8 {
-        todo!()
+    #[test]
+    fn test_ppu_addr_write_ppu_data_read_inc_by_32() {
+        let mut ppu = PPU::new_empty_chr_rom(Mirroring::Horizontal);
+
+        ppu.write_ppuctrl(0b100);
+        ppu.vram[0x01FF] = 69;
+        ppu.vram[0x01FF + 32] = 70;
+        ppu.vram[0x01FF + 64] = 71;
+
+        ppu.write_ppuaddr(0x21);
+        ppu.write_ppuaddr(0xFF);
+
+        ppu.read_ppudata();
+        assert_eq!(69, ppu.read_ppudata());
+        assert_eq!(70, ppu.read_ppudata());
+        assert_eq!(71, ppu.read_ppudata());
     }
 
-    fn wrote_to_oam_addr(&mut self, data: u8) {
+    #[test]
+    fn test_ppuaddr_write_ppudata_write() {
+        let mut ppu = PPU::new_empty_chr_rom(Mirroring::Horizontal);
 
+        ppu.write_ppuaddr(0x20);
+        ppu.write_ppuaddr(0x01);
+        ppu.write_ppudata(69);
+
+        assert_eq!(69, ppu.vram[0x0001])
     }
 
-    fn write_to_oam_data(&mut self, data: u8) {
+    #[test]
+    fn test_write_oamdma() {
+        let mut ppu = PPU::new_empty_chr_rom(Mirroring::Horizontal);
+
+        let mut dma_data = [0u8; 256];
+        for i in 0..=255u8 {
+            dma_data[i as usize] = i;
+        }
+
+        ppu.write_oamaddr(0x10);
+        ppu.write_oamdma(&dma_data);
+
+        for i in 0..=255u8 {
+            assert_eq!(i, ppu.oam_data[i.wrapping_add(0x10) as usize]);
+        }
 
     }
-
-    fn read_oam_data(&self) -> u8 {
-        todo!()
+    #[test]
+    fn test_mirror_vram_addr_horizontal() {
+        let ppu = PPU::new_empty_chr_rom(Mirroring::Horizontal);
+        
+        let addr1 = 0x2000 + 0x0100;  // between 0x2000-0x2400
+        let addr2 = 0x2400 + 0x0100;  // between 0x2400-0x2800
+        let addr3 = 0x2800 + 0x0100;  // between 0x2400-0x2800
+        let addr4 = 0x2c00 + 0x0100;  // between 0x2400-0x2800
+        assert_eq!(0x0100, ppu.mirror_vram_addr(addr1));
+        assert_eq!(0x0100, ppu.mirror_vram_addr(addr2));
+        assert_eq!(0x0500, ppu.mirror_vram_addr(addr3));
+        assert_eq!(0x0500, ppu.mirror_vram_addr(addr4));
     }
 
-    
-}
-
-
-
-bitflags! {
-    // PPUCTRL
-    // 7  bit  0
-    // ---- ----
-    // VPHB SINN
-    // |||| ||||
-    // |||| ||++- Base nametable address
-    // |||| ||    (0 = $2000; 1 = $2400; 2 = $2800; 3 = $2C00)
-    // |||| |+--- VRAM address increment per CPU read/write of PPUDATA
-    // |||| |     (0: add 1, going across; 1: add 32, going down)
-    // |||| +---- Sprite pattern table address for 8x8 sprites
-    // ||||       (0: $0000; 1: $1000; ignored in 8x16 mode)
-    // |||+------ Background pattern table address (0: $0000; 1: $1000)
-    // ||+------- Sprite size (0: 8x8 pixels; 1: 8x16 pixels – see PPU OAM#Byte 1)
-    // |+-------- PPU master/slave select
-    // |          (0: read backdrop from EXT pins; 1: output color on EXT pins)
-    // +--------- Generate an NMI at the start of the
-    //         vertical blanking interval (0: off; 1: on)
-
-    #[derive(Debug, Clone)]
-    pub struct PpuControl: u8 {
-        const NAMETABLE_0 =             0b0000_0001;
-        const NAMETABLE_1 =             0b0000_0010;
-        const VRAM_ADDR_INC =           0b0000_0100;
-        const SPRITE_PATTERN_ADDR =     0b0000_1000;
-        const BACKGROUND_PATTERN_ADDR = 0b0001_0000;
-        const SPRITE_SIZE =             0b0010_0000;
-        const MASTER_SLAVE_SELECT =     0b0100_0000;
-        const GENERATE_NMI =            0b1000_0000;
+    #[test]
+    fn test_mirror_vram_addr_vertical() {
+        let ppu = PPU::new_empty_chr_rom(Mirroring::Vertical);
+        
+        let addr1 = 0x2000 + 0x0100;  // between 0x2000-0x2400
+        let addr2 = 0x2400 + 0x0100;  // between 0x2400-0x2800
+        let addr3 = 0x2800 + 0x0100;  // between 0x2400-0x2800
+        let addr4 = 0x2c00 + 0x0100;  // between 0x2400-0x2800
+        assert_eq!(0x0100, ppu.mirror_vram_addr(addr1));
+        assert_eq!(0x0500, ppu.mirror_vram_addr(addr2));
+        assert_eq!(0x0100, ppu.mirror_vram_addr(addr3));
+        assert_eq!(0x0500, ppu.mirror_vram_addr(addr4));
     }
-}
 
-impl PpuControl {
-    pub fn get_name_table_addr(&self) -> u16 {
-        match self.bits() & 0b11 {
-            0b00 => 0x2000,
-            0b01 => 0x2400,
-            0b10 => 0x2800,
-            0b11 => 0x2C00,
-            _ => panic!("impossible")
+    #[test]
+    fn test_mirror_vram_addr_0x3000_to_0x3eff() {
+        let mut ppu = PPU::new_empty_chr_rom(Mirroring::Vertical);
+        // put dummy data in vram
+        for i in 0..0x800 {
+            ppu.vram[i] = i as u8;
+        }
+
+        for i in 0x2000..0x2EFF {
+            let j = i + 0x1000;
+            assert_eq!(ppu.read_byte(i), ppu.read_byte(j));
         }
     }
 
-    pub fn get_vram_addr_inc_value(&self) -> u8 {
-        if self.contains(PpuControl::VRAM_ADDR_INC) {
-            32
-        } else {
-            1
-        }
-    }
-
-    pub fn get_sprite_pattern_addr(&self) -> u16 {
-        if self.contains(PpuControl::SPRITE_PATTERN_ADDR) {
-            0x1000
-        } else {
-            0
-        }
-    }
-
-    pub fn get_background_pattern_addr(&self) -> u16 {
-        if self.contains(PpuControl::BACKGROUND_PATTERN_ADDR) {
-            0x1000
-        } else {
-            0
-        }
-    }
-
-    pub fn get_sprite_size(&self) -> (u8, u8) {
-        if self.contains(PpuControl::SPRITE_SIZE) {
-            (8, 16)
-        } else {
-            (8, 8)
-        }
-    }
-
-    pub fn get_master_slave_select(&self) -> bool {
-        self.contains(PpuControl::MASTER_SLAVE_SELECT)
-    }
-
-    pub fn get_generate_nmi(&self) -> bool {
-        self.contains(PpuControl::GENERATE_NMI)
-    }
-
-    pub fn write(&mut self, data: u8) {
-        // Not sure if this actually works...
-        *self = PpuControl::from_bits_truncate(data)
-    }
 }
-
-bitflags! {
-    // 7  bit  0
-    // ---- ----
-    // BGRs bMmG
-    // |||| ||||
-    // |||| |||+- Greyscale (0: normal color, 1: produce a greyscale display)
-    // |||| ||+-- 1: Show background in leftmost 8 pixels of screen, 0: Hide
-    // |||| |+--- 1: Show sprites in leftmost 8 pixels of screen, 0: Hide
-    // |||| +---- 1: Show background
-    // |||+------ 1: Show sprites
-    // ||+------- Emphasize red (green on PAL/Dendy)
-    // |+-------- Emphasize green (red on PAL/Dendy)
-    // +--------- Emphasize blue
-    #[derive(Debug, Clone)]
-    pub struct PpuMask: u8 {
-        const GREYSCALE =           0b0000_0001;
-        const BACKGROUND_LEFTMOST = 0b0000_0010;
-        const SPRITES_LEFTMOST =    0b0000_0100;
-        const SHOW_BACKGROUND =     0b0000_1000;
-        const SHOW_SPRITES =        0b0001_0000;
-        const EMPHASIZE_RED =       0b0010_0000;
-        const EMPHASIZE_GREEN =     0b0100_0000;
-        const EMPHASIZE_BLUE =      0b1000_0000;
-    }
-}
-
-impl PpuMask {
-    pub fn write(&mut self, data: u8) {
-        *self = PpuMask::from_bits_truncate(data)
-    }
-}
-
-bitflags! {
-    // 7  bit  0
-    // ---- ----
-    // VSO. ....
-    // |||| ||||
-    // |||+-++++- PPU open bus. Returns stale PPU bus contents.
-    // ||+------- Sprite overflow. The intent was for this flag to be set
-    // ||         whenever more than eight sprites appear on a scanline, but a
-    // ||         hardware bug causes the actual behavior to be more complicated
-    // ||         and generate false positives as well as false negatives; see
-    // ||         PPU sprite evaluation. This flag is set during sprite
-    // ||         evaluation and cleared at dot 1 (the second dot) of the
-    // ||         pre-render line.
-    // |+-------- Sprite 0 Hit.  Set when a nonzero pixel of sprite 0 overlaps
-    // |          a nonzero background pixel; cleared at dot 1 of the pre-render
-    // |          line.  Used for raster timing.
-    // +--------- Vertical blank has started (0: not in vblank; 1: in vblank).
-    //         Set at dot 1 of line 241 (the line *after* the post-render
-    //         line); cleared after reading $2002 and at dot 1 of the
-    //         pre-render line.
-    #[derive(Debug, Clone)]
-    pub struct PpuStatus: u8 {
-        const UNUSED_0 =         0b0000_0001;
-        const UNUSED_1 =         0b0000_0010;
-        const UNUSED_2 =         0b0000_0100;
-        const UNUSED_3 =         0b0000_1000;
-        const UNUSED_4 =         0b0001_0000;
-        const SPRITE_OVERFLOW =  0b0010_0000;
-        const SPRITE_ZERO_HIT =  0b0100_0000;
-        const VERT_BLANK_START = 0b1000_0000;
-    }
-}
-
-
-#[derive(Debug, Clone)]
-struct PpuAddr {
-    data: (u8, u8),
-    is_set_msb: bool
-}
-
-impl PpuAddr {
-    pub fn new() -> Self {
-        PpuAddr { data: (0, 0), is_set_msb: true}
-    }
-
-    pub fn write(&mut self, byte: u8) {
-        if self.is_set_msb {
-            self.data.1 = byte & 0b0011_1111;
-        } else {
-            self.data.0 = byte;
-        }
-        self.is_set_msb = !self.is_set_msb; // flip the bool
-    }
-
-    pub fn read(&self) -> u16 { 
-        let msb = self.data.1 as u16;
-        let lsb = self.data.0 as u16;
-        return (msb << 8) + lsb;
-    }
-
-    pub fn increment(&mut self, inc: u8) {
-        let result = self.read() + (inc as u16);
-        self.data.1 = ((result >> 8) & 0b0011_1111) as u8;
-        self.data.0 = result as u8;
-    }
-
-    pub fn reset(&mut self) {
-        self.is_set_msb = true;
-    }
-    
-}
-
-struct PpuData {
-    data: u8
-}
-
-
-

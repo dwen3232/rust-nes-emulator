@@ -17,6 +17,8 @@
 use core::panic;
 
 use crate::cartridge::ROM;
+use crate::ppu::PPU;
+use crate::traits::Memory;
 
 const RAM_START: u16 =      0x0000;
 const RAM_END: u16 =        0x1FFF;
@@ -37,9 +39,9 @@ const PPU_MASK: u16 = (0b1 << 3) - 1;
 #[derive(Debug)]
 pub struct Bus {
     ram: [u8; 0x800],   // 2KB RAM
-    ppu_reg: [u8; 8],   // 8 PPU registers
+    ppu: PPU,
+    prg_rom: Vec<u8>,
     apuio_reg: [u8; 0x20],
-    cartridge: ROM,
 }
 
 
@@ -51,23 +53,47 @@ impl Bus {
     pub fn new(cartridge: ROM) -> Self {
         Bus {
             ram: [0; 0x800],
-            ppu_reg: [0; 8],
-            cartridge: cartridge,
+            ppu: PPU::new(cartridge.chr_rom, cartridge.mirroring),
+            prg_rom: cartridge.prg_rom,
             apuio_reg: [0; 0x20],
         }
     }
 
     pub fn load_nes(&mut self, path: &str) {
-        self.cartridge = ROM::create_from_nes(path).expect("Path does not exist");
+        let rom = ROM::create_from_nes(path).expect("Path does not exist");
+        self.prg_rom = rom.prg_rom;
+        self.ppu.chr_rom = rom.chr_rom;
+        self.ppu.mirroring = rom.mirroring;
     }
 
-    pub fn write_byte(&mut self, index: u16, value: u8) {
+    pub fn increment_ppu_cycle_counter(&mut self, cycles: u8) {
+        self.ppu.increment_cycle_counter(cycles)
+    }
+
+    pub fn poll_nmi_interrupt_signal(&mut self) -> Option<()> {
+        self.ppu.nmi_interrupt_signal.take()
+    }
+}
+
+impl Memory for Bus {
+    fn write_byte(&mut self, index: u16, value: u8) {
         match index {
             RAM_START ..= RAM_END => {
                 self.ram[(index & RAM_MASK) as usize] = value
             }
             PPU_REG_START ..= PPU_REG_END => {
-                self.ram[(index & PPU_MASK) as usize] = value
+                let masked_index = index & PPU_MASK;
+                match masked_index {
+                    0 => self.ppu.write_ppuctrl(value),
+                    1 => self.ppu.write_ppumask(value),
+                    2 => panic!("PPUSTATUS is read-only"),
+                    3 => self.ppu.write_oamaddr(value),
+                    4 => self.ppu.write_oamdata(value),
+                    5 => self.ppu.write_ppuscroll(value),
+                    6 => self.ppu.write_ppuaddr(value),
+                    7 => self.ppu.write_ppudata(value),
+                    _ => panic!("Invalid PPU_REG index")
+                }
             },
             APUIO_START ..= APUIO_END => {
                 let mut index = index - APUIO_START;
@@ -79,13 +105,24 @@ impl Bus {
         }
     }
 
-    pub fn read_byte(&self, index: u16) -> u8{
+    fn read_byte(&mut self, index: u16) -> u8{
         match index {
             RAM_START ..= RAM_END => {
                 self.ram[(index & RAM_MASK) as usize]
             },
             PPU_REG_START ..= PPU_REG_END => {
-                self.ram[(index & PPU_MASK) as usize]
+                let masked_index = index & PPU_MASK;
+                match masked_index {
+                    0 => panic!("PPUCTRL is write-only"),
+                    1 => panic!("PPUMASK is write-only"),
+                    2 => self.ppu.read_ppustatus(),
+                    3 => panic!("OAMADDR is write-only"),
+                    4 => self.ppu.read_oamdata(),
+                    5 => panic!("PPUSCROLL is write-only"),
+                    6 => panic!("PPUADDR is write-only"),
+                    7 => self.ppu.read_ppudata(),
+                    _ => panic!("Invalid PPU_REG index")
+                }
             },
             APUIO_START ..= APUIO_END => {
                 let mut index = index - APUIO_START;
@@ -93,22 +130,15 @@ impl Bus {
             },
             PRG_ROM_START ..= PRG_ROM_END => {
                 let mut index = index - PRG_ROM_START;
-                if self.cartridge.prg_rom.len() == 0x4000 && index >= 0x4000 {
+                if self.prg_rom.len() == 0x4000 && index >= 0x4000 {
                     //mirror if needed
                     index = index % 0x4000;
                 }
-                self.cartridge.prg_rom[index as usize]
+                self.prg_rom[index as usize]
             },
             _ => panic!("Cannot read from {:x}", index)
         }
     }
-
-    pub fn read_two_bytes(&self, index: u16) -> u16 {
-        let lsb = self.read_byte(index) as u16;
-        let msb = self.read_byte(index + 1) as u16;
-        (msb << 8) + lsb
-    }
-
 }
 
 

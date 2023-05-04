@@ -1,6 +1,7 @@
 pub trait Memory {
     // Trait for byte addressability using 2-byte addresses
-    fn read_byte(&self, index: u16) -> u8;
+    // Reading may change the state, so I let it be a mutable borrow here
+    fn read_byte(&mut self, index: u16) -> u8;
 
     fn write_byte(&mut self, index: u16, value: u8);
 

@@ -15,6 +15,12 @@ use bus::Bus;
 pub mod decode;
 use decode::{Instruction, AddressingMode};
 
+pub mod interrupt;
+use interrupt::{
+    Interrupt,
+    NMI_INTERRUPT,
+};
+
 // #[derive(Debug)]
 pub enum Param {    // used by an instruction
     Value(u8),
@@ -47,7 +53,7 @@ bitflags! {
     }
 }
 
-const STACK_POINTER_INIT: u8 = 0xfd;
+const STACK_POINTER_INIT: u8 = 0xFD;
 const PROGRAM_COUNTER_INIT: u16 = 0x600;
 
 #[derive(Debug)]
@@ -179,6 +185,7 @@ impl CPU {  // Public functions
         // self.status = CpuStatus::ALWAYS | CpuStatus::BRK;
         self.status = CpuStatus::ALWAYS | CpuStatus::INT_DISABLE;
         self.program_counter = self.read_two_bytes(0xFFFC) - 4; // TEST: trying out subtracting one
+        // self.program_counter = self.read_two_bytes(0xFFFC); // TEST: trying out subtracting one
     }
 
     pub fn load_nes(&mut self, path: &str) {
@@ -231,6 +238,11 @@ impl CPU {  // Public functions
         // This function will take in a program, and execute it step by step
         // TODO: result is Result<()), String> right now, need to change to something more descriptive
         loop {
+            // 1. Check for interrupt (TODO: refactor this to be general interrupt poller)
+            if let Some(()) = self.bus.poll_nmi_interrupt_signal() {
+                self.execute_interrupt(NMI_INTERRUPT);
+            }
+
             // 0. Execute callback
             callback(self);
 
@@ -252,15 +264,32 @@ impl CPU {  // Public functions
         }
     }
 
-    pub fn execute_instruction(&mut self, instruction: Instruction, parameter: Option<Param>) {
+    fn execute_interrupt(&mut self, interrupt: Interrupt) {
+        let lsb = self.program_counter as u8;
+        let msb = (self.program_counter >> 8) as u8;
+        let mut status = self.status.clone();
+        // Set BRK flag depending on interrupt type
+        status.set(CpuStatus::BRK, interrupt.is_set_b_flag);
+
+        self.push_to_stack(msb);
+        self.push_to_stack(lsb);
+        self.push_to_stack(status.bits());
+
+        self.status.set(CpuStatus::INT_DISABLE, interrupt.is_hardware_interrupt);        
+        self.program_counter = self.read_two_bytes(interrupt.vector);
+    }
+
+    fn execute_instruction(&mut self, instruction: Instruction, parameter: Option<Param>) {
         // FUTURE WORK: can probably condense this more, but not really necessary
         match instruction {
             Instruction::ADC => {
                 match parameter {
                     Some(Param::Value(val)) => 
                         self.adc(val),
-                    Some(Param::Address(mem_addr)) => 
-                        self.adc(self.read_byte(mem_addr)),
+                    Some(Param::Address(mem_addr)) => {
+                        let byte = self.read_byte(mem_addr);
+                        self.adc(byte)
+                    },
                     _ => panic!("Invalid parameter"),
                 }
             },
@@ -268,8 +297,10 @@ impl CPU {  // Public functions
                 match parameter {
                     Some(Param::Value(val)) => 
                         self.and(val),
-                    Some(Param::Address(mem_addr)) => 
-                        self.and(self.read_byte(mem_addr)),
+                    Some(Param::Address(mem_addr)) => {
+                        let byte = self.read_byte(mem_addr);
+                        self.and(byte)
+                    }
                     _ => panic!("Invalid parameter"),
                 }
             },
@@ -286,8 +317,10 @@ impl CPU {  // Public functions
                 match parameter {
                     Some(Param::Value(val)) => 
                         self.bit(val),
-                    Some(Param::Address(mem_addr)) => 
-                        self.bit(self.read_byte(mem_addr)),
+                    Some(Param::Address(mem_addr)) => {
+                        let byte = self.read_byte(mem_addr);
+                        self.bit(byte)
+                    },
                     _ => panic!("Invalid parameter"),
                 }
             }
@@ -359,8 +392,10 @@ impl CPU {  // Public functions
                 match parameter {
                     Some(Param::Value(val)) => 
                         self.cmp(val),
-                    Some(Param::Address(mem_addr)) => 
-                        self.cmp(self.read_byte(mem_addr)),
+                    Some(Param::Address(mem_addr)) => {
+                        let byte = self.read_byte(mem_addr);
+                        self.cmp(byte)
+                    },
                     _ => panic!("Invalid parameter"),
                 }
             },
@@ -368,8 +403,10 @@ impl CPU {  // Public functions
                 match parameter {
                     Some(Param::Value(val)) => 
                         self.cpx(val),
-                    Some(Param::Address(mem_addr)) => 
-                        self.cpx(self.read_byte(mem_addr)),
+                    Some(Param::Address(mem_addr)) => {
+                        let byte = self.read_byte(mem_addr);
+                        self.cpx(byte)
+                    },
                     _ => panic!("Invalid parameter"),
                 }
             },
@@ -377,8 +414,10 @@ impl CPU {  // Public functions
                 match parameter {
                     Some(Param::Value(val)) => 
                         self.cpy(val),
-                    Some(Param::Address(mem_addr)) => 
-                        self.cpy(self.read_byte(mem_addr)),
+                    Some(Param::Address(mem_addr)) => {
+                        let byte = self.read_byte(mem_addr);
+                        self.cpy(byte)
+                    },
                     _ => panic!("Invalid parameter"),
                 }
             },
@@ -393,8 +432,10 @@ impl CPU {  // Public functions
                 match parameter {
                     Some(Param::Value(val)) => 
                         self.eor(val),
-                    Some(Param::Address(mem_addr)) => 
-                        self.eor(self.read_byte(mem_addr)),
+                    Some(Param::Address(mem_addr)) => {
+                        let byte = self.read_byte(mem_addr);
+                        self.eor(byte)
+                    },
                     _ => panic!("Invalid parameter"),
                 }
             },
@@ -472,8 +513,10 @@ impl CPU {  // Public functions
                 match parameter {
                     Some(Param::Value(val)) => 
                         self.lda(val),
-                    Some(Param::Address(mem_addr)) => 
-                        self.lda(self.read_byte(mem_addr)),
+                    Some(Param::Address(mem_addr)) => {
+                        let byte = self.read_byte(mem_addr);
+                        self.lda(byte)
+                    },
                     _ => panic!("Invalid parameter"),
                 }
             },
@@ -481,8 +524,10 @@ impl CPU {  // Public functions
                 match parameter {
                     Some(Param::Value(val)) => 
                         self.ldx(val),
-                    Some(Param::Address(mem_addr)) => 
-                        self.ldx(self.read_byte(mem_addr)),
+                    Some(Param::Address(mem_addr)) => {
+                        let byte = self.read_byte(mem_addr);
+                        self.ldx(byte)
+                    },
                     _ => panic!("Invalid parameter"),
                 }
             },
@@ -490,8 +535,10 @@ impl CPU {  // Public functions
                 match parameter {
                     Some(Param::Value(val)) => 
                         self.ldy(val),
-                    Some(Param::Address(mem_addr)) => 
-                        self.ldy(self.read_byte(mem_addr)),
+                    Some(Param::Address(mem_addr)) => {
+                        let byte = self.read_byte(mem_addr);
+                        self.ldy(byte)
+                    },
                     _ => panic!("Invalid parameter"),
                 }
             },
@@ -506,14 +553,16 @@ impl CPU {  // Public functions
                 }
             },
             Instruction::NOP => {
-
+                // TODO: implement this?
             }
             Instruction::ORA => {
                 match parameter {
                     Some(Param::Value(val)) => 
                         self.ora(val),
-                    Some(Param::Address(mem_addr)) => 
-                        self.ora(self.read_byte(mem_addr)),
+                    Some(Param::Address(mem_addr)) => {
+                        let byte = self.read_byte(mem_addr);
+                        self.ora(byte)
+                    },
                     _ => panic!("Invalid parameter"),
                 }
             },
@@ -610,8 +659,10 @@ impl CPU {  // Public functions
                 match parameter {
                     Some(Param::Value(val)) => 
                         self.sbc(val),
-                    Some(Param::Address(mem_addr)) => 
-                        self.sbc(self.read_byte(mem_addr)),
+                    Some(Param::Address(mem_addr)) => {
+                        let byte = self.read_byte(mem_addr);
+                        self.sbc(byte)
+                    },
                     _ => panic!("Invalid parameter"),
                 }
             },
@@ -685,7 +736,7 @@ impl CPU {  // Public functions
 }
 
 impl Memory for CPU {
-    fn read_byte(&self, index: u16) -> u8 {
+    fn read_byte(&mut self, index: u16) -> u8 {
         // must increment program counter before the attempted read returns None
         self.bus.read_byte(index)
     }
@@ -694,6 +745,7 @@ impl Memory for CPU {
         self.bus.write_byte(index, value)
     }
 }
+
 impl CPU {  // helper functions
 
     pub fn get_status(&self) -> u8 {

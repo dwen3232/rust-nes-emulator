@@ -49,7 +49,6 @@ fn test_cpu_official_opcodes_nestest() {
         .map(|s| s.trim_end().to_string())
         .collect();
 
-    // this doesn't really work yet because of all the panics I have. Need to refactor to get rid of them
     for i in 0..5002 {
         assert_eq!(result[i], expected_log[i], "Diff at line {}", i);
     }

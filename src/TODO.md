@@ -1,5 +1,20 @@
- - Implement unofficial opcodes (will be painful)
-    - Started work on debugging, very painful indeed
-    - Right now, have issues with PLP
- - Figure out what the true starting status should be (different sources say different things)
- - Implement PPU
+TODO
+ - Implement general interrupt poller
+ - Implement cycle counting for CPU
+
+BACKLOG
+ - CPU reset (specifically, the program counter. Why subtract 4?)
+    - Found that for nestest, C004 is the correct reset vector, ref: https://forums.nesdev.org/viewtopic.php?t=14268
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+05/03/23
+ - Finished interrupt handler
+
+05/02/23
+ - Added new interrupt.rs file
+ - Added nmi_interrupt_signal to PPU
+
+05/01/23
+ - Competed PPUADDR and PPUDATA read and write
+ - Completed OAMDMA write (but did not wire it into CPU bus)
+ - Wrote test cases

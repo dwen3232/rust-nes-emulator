@@ -37,10 +37,10 @@ pub enum Mirroring {
 // Representation for a cartridge. Uses .nes file format
 #[derive(Debug)]
 pub struct ROM {
-    mirroring: Mirroring,
-    mapper: u8,
+    pub mirroring: Mirroring,
+    pub mapper: u8,
     pub prg_rom: Vec<u8>,
-    chr_rom: Vec<u8>,
+    pub chr_rom: Vec<u8>,
 }
 
 impl ROM {
