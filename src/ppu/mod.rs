@@ -44,9 +44,8 @@ pub struct PPU {
 
     pub mirroring: Mirroring,
 
-    // TODO: Can these be smaller?
-    cycle_counter: usize,
-    cur_scanline: usize, 
+    pub cycle_counter: usize,
+    pub cur_scanline: usize, 
 
     pub nmi_interrupt_signal: Option<()>,
 }
@@ -266,7 +265,7 @@ mod tests {
     }
 
     #[test]
-    fn test_ppu_addr_write_ppudata_read_page_cross() {
+    fn test_ppuaddr_write_ppudata_read_page_cross() {
         let mut ppu = PPU::new_empty_chr_rom(Mirroring::Horizontal);
 
         ppu.vram[0x01FF] = 69;
@@ -281,7 +280,7 @@ mod tests {
     }
 
     #[test]
-    fn test_ppu_addr_write_ppu_data_read_inc_by_32() {
+    fn test_ppuaddr_write_ppudata_read_inc_by_32() {
         let mut ppu = PPU::new_empty_chr_rom(Mirroring::Horizontal);
 
         ppu.write_ppuctrl(0b100);
@@ -366,6 +365,82 @@ mod tests {
             let j = i + 0x1000;
             assert_eq!(ppu.read_byte(i), ppu.read_byte(j));
         }
+    }
+
+    #[test]
+    fn test_ppu_vram_horizontal_mirror() {
+        let mut ppu = PPU::new_empty_chr_rom(Mirroring::Horizontal);
+        ppu.write_ppuaddr(0x24);
+        ppu.write_ppuaddr(0xFF);
+        ppu.write_ppudata(69);
+
+        ppu.write_ppuaddr(0x28);
+        ppu.write_ppuaddr(0xFF);
+        ppu.write_ppudata(70);
+
+        ppu.write_ppuaddr(0x20);
+        ppu.write_ppuaddr(0xFF);
+        ppu.read_ppudata(); // load buffer
+        assert_eq!(ppu.read_ppudata(), 69);
+
+        ppu.write_ppuaddr(0x2C);
+        ppu.write_ppuaddr(0xFF);
+        ppu.read_ppudata(); //load buffer
+        assert_eq!(ppu.read_ppudata(), 70);
+    }
+
+    #[test]
+    fn test_ppu_vram_vertical_mirror() {
+        let mut ppu = PPU::new_empty_chr_rom(Mirroring::Vertical);
+        ppu.write_ppuaddr(0x20);
+        ppu.write_ppuaddr(0xFF);
+        ppu.write_ppudata(69);
+
+        ppu.write_ppuaddr(0x2C);
+        ppu.write_ppuaddr(0xFF);
+        ppu.write_ppudata(70);
+
+        ppu.write_ppuaddr(0x28);
+        ppu.write_ppuaddr(0xFF);
+        ppu.read_ppudata(); // load buffer
+        assert_eq!(ppu.read_ppudata(), 69);
+
+        ppu.write_ppuaddr(0x24);
+        ppu.write_ppuaddr(0xFF);
+        ppu.read_ppudata(); //load buffer
+        assert_eq!(ppu.read_ppudata(), 70);
+    }
+
+    #[test]
+    fn test_read_cpustatus_resets_ppuaddr() {
+        let mut ppu = PPU::new_empty_chr_rom(Mirroring::Horizontal);
+        ppu.vram[0x0001] = 69;
+        
+        ppu.write_ppuaddr(0x21);
+        ppu.write_ppuaddr(0x20);
+        ppu.write_ppuaddr(0x01);
+        ppu.read_ppudata(); // load buffer
+        assert_ne!(ppu.read_ppudata(), 69);
+
+        ppu.read_ppustatus();
+
+        ppu.write_ppuaddr(0x20);
+        ppu.write_ppuaddr(0x01);
+        ppu.read_ppudata();
+
+        assert_eq!(ppu.read_ppudata(), 69);
+    }
+    
+    #[test]
+    fn test_read_cpu_status_resets_vblank() {
+        let mut ppu = PPU::new_empty_chr_rom(Mirroring::Horizontal);
+        ppu.ppustatus.set_vblank_started(true);
+
+        let status = ppu.read_ppustatus();
+
+        assert_eq!(status >> 7, 1);
+        assert_eq!(ppu.read_ppustatus() >> 7, 0);
+
     }
 
 }

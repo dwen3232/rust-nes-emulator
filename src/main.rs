@@ -1,6 +1,7 @@
 // mod ram;
+use rust_nes_emulator::display::tile_viewer::run;
+
 
 fn main() {
-    println!("Hello, world!");
-    println!("{}", 0x10000 - 0x0800 - 0x0800)
+    run();
 }

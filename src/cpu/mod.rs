@@ -25,13 +25,15 @@ use interrupt::{
 pub enum Param {    // used by an instruction
     Value(u8),
     Address(u16),
+    None
 }
 
 impl fmt::Debug for Param {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Param::Value(val) => write!(f, "Value(0x{:x})", val),
-            Param::Address(addr) =>   write!(f, "Address(0x{:x})", addr),
+            Param::Address(addr) => write!(f, "Address(0x{:x})", addr),
+            Param::None => write!(f, "")
         }
     }
 }
@@ -67,21 +69,28 @@ pub struct CPU {
     pub stack_pointer: u8,
     pub program_counter: u16,
 
-    // Bus
+    // Signals (should make this into a bit flag?)
+    page_cross_flag: bool,
+    branch_flag: bool,
+
     bus: Bus,
+    cycle_counter: usize,
 }
 
 impl CPU {  // Decoding
-    pub fn read_arg(&mut self, mode: &AddressingMode) -> Option<Param> {
+    pub fn read_arg(&mut self, mode: &AddressingMode) -> Param {
         // Based on the addressing mode, read `n` number of argument bytes from the program and process it into a parameter
         // to be used by some instruction
+        // Returns the number of cycles to read the argument, NOT INCLUDING THE CYCLE TO DECODE THE INSTRUCTION
         match mode {
-            AddressingMode::Implicit => None,
+            AddressingMode::Implicit => {
+                Param::None
+            },
             AddressingMode::Accumulator => {
-                Some(Param::Value(self.reg_a))
+                Param::Value(self.reg_a)
             },
             AddressingMode::Immediate | AddressingMode::Relative => {
-                Some(Param::Value(self.read_byte_from_pc()))
+                Param::Value(self.read_byte_from_pc())
             },
             AddressingMode::IndirectJump => {
                 // 6502 has a edge case with page boundary when performing indirect jumps
@@ -103,57 +112,65 @@ impl CPU {  // Decoding
                 } else {
                     self.read_two_bytes(mem_addr)
                 };
-                // now read from memory
-                Some(Param::Address(mem_addr))
+                // IndirectJump does not read the address
+                Param::Address(mem_addr)
             },
             AddressingMode::Absolute => {
-                // first read two bytes
                 let mem_addr = self.read_two_bytes_from_pc();
-                // read memory from bus
-                Some(Param::Address(mem_addr))
+                Param::Address(mem_addr)
             },
             AddressingMode::AbsoluteJump => {
                 let mem_addr = self.read_two_bytes_from_pc();
-                Some(Param::Address(mem_addr))
+                // AbsoluteJump does not read the address
+                Param::Address(mem_addr)
             },
             AddressingMode::ZeroPage => {
                 // read single byte, msb is always 0x00
                 let zero_page_addr = self.read_byte_from_pc() as u16;
-                // read memory from bus
-                Some(Param::Address(zero_page_addr))
+                Param::Address(zero_page_addr)
             },
             AddressingMode::ZeroPageIndexX => {
                 let zero_page_addr = self.read_byte_from_pc().wrapping_add(self.reg_x) as u16;
-                Some(Param::Address(zero_page_addr))
+                Param::Address(zero_page_addr)
             },
             AddressingMode::ZeroPageIndexY => {
                 let zero_page_addr = self.read_byte_from_pc().wrapping_add(self.reg_y) as u16;
-                Some(Param::Address(zero_page_addr))
+                Param::Address(zero_page_addr)
             },
             AddressingMode::AbsoluteIndexX => {
                 // Form <instruction> <addr>, X where <addr> is u16, specifies the value of read(<addr> + 1)
-                let mem_addr = self.read_two_bytes_from_pc().wrapping_add(self.reg_x as u16);
-                Some(Param::Address(mem_addr))
+                let orig_addr = self.read_two_bytes_from_pc();
+                let orig_msb = (orig_addr >> 8) as u8;
+                let mem_addr = orig_addr.wrapping_add(self.reg_x as u16);
+                let msb = (mem_addr >> 8) as u8;
+                self.page_cross_flag = (orig_msb != msb);
+                Param::Address(mem_addr)
             },
             AddressingMode::AbsoluteIndexY => {
                 // Same as AbsoluteIndexX, but with reg_y instead
-                let mem_addr = self.read_two_bytes_from_pc().wrapping_add(self.reg_y as u16);
-                Some(Param::Address(mem_addr))
+                let orig_addr = self.read_two_bytes_from_pc();
+                let orig_msb = (orig_addr >> 8) as u8;
+                let mem_addr = orig_addr.wrapping_add(self.reg_y as u16);
+                let msb = (mem_addr >> 8) as u8;
+                self.page_cross_flag = (orig_msb != msb);
+                Param::Address(mem_addr)
             },
             AddressingMode::IndirectX => {
                 // Form <instruction (<addr>, X), where <addr> is u8
                 let zero_page_addr = (self.read_byte_from_pc().wrapping_add(self.reg_x)) as u16;
                 // TODO: may need to re-evaluate how this is done when there's a page cross
-                let indirect = self.read_two_page_bytes(zero_page_addr);
-                // read memory from bus
-                Some(Param::Address(indirect))
+                let mem_addr = self.read_two_page_bytes(zero_page_addr);
+                Param::Address(mem_addr)
             },
             AddressingMode::IndirectY => {
                 let zero_page_addr = self.read_byte_from_pc() as u16;
                 // TODO: may need to re-evaluate how this is done when there's a page cross
-                let indirect = self.read_two_page_bytes(zero_page_addr)
-                                        .wrapping_add(self.reg_y as u16);
-                Some(Param::Address(indirect))
+                let orig_addr = self.read_two_page_bytes(zero_page_addr);
+                let orig_msb = (orig_addr >> 8) as u8;
+                let mem_addr = orig_addr.wrapping_add(self.reg_y as u16);
+                let msb = (mem_addr >> 8) as u8;
+                self.page_cross_flag = (orig_msb != msb);
+                (Param::Address(mem_addr))
             },
         }
     }
@@ -173,7 +190,10 @@ impl CPU {  // Public functions
             status: CpuStatus::ALWAYS | CpuStatus::INT_DISABLE,
             stack_pointer: STACK_POINTER_INIT,      // probably needs to initialize to something else
             program_counter: PROGRAM_COUNTER_INIT,      // same here
+            page_cross_flag: false,
+            branch_flag: false,
             bus: bus,
+            cycle_counter: 0
         }
     }
 
@@ -186,6 +206,7 @@ impl CPU {  // Public functions
         self.status = CpuStatus::ALWAYS | CpuStatus::INT_DISABLE;
         self.program_counter = self.read_two_bytes(0xFFFC) - 4; // TEST: trying out subtracting one
         // self.program_counter = self.read_two_bytes(0xFFFC); // TEST: trying out subtracting one
+        self.increment_cycle_counter(7);
     }
 
     pub fn load_nes(&mut self, path: &str) {
@@ -243,24 +264,28 @@ impl CPU {  // Public functions
                 self.execute_interrupt(NMI_INTERRUPT);
             }
 
-            // 0. Execute callback
+            // Execute callback
             callback(self);
 
-            // 1. Read opcode and decode it to an instruction, always takes 1 cycle
+            // 2. Read opcode and decode it to an instruction, always takes 1 cycle
             let opcode_raw = self.read_byte_from_pc();
-            let (instruction, addressing_mode) = decode::decode_opcode(opcode_raw)?;
+            let (instruction, addressing_mode, cycles) = decode::decode_opcode(opcode_raw)?;
 
             // TEMPORARY: if BRK, then exit
             if instruction == Instruction::BRK {
                 return Ok(())
             }
 
-            // 2. Read some number of bytes depending on what the addressing mode is and decode the instruction parameter, may take many cycles
+            // 3. Read some number of bytes depending on what the addressing mode is and decode the instruction parameter, may take many cycles
             // Ref: http://www.6502.org/tutorials/6502opcodes.html
             let parameter = self.read_arg(&addressing_mode);
             
-            // 3. Execute the instruction
-            self.execute_instruction(instruction, parameter);
+            // 4. Execute the instruction
+            self.execute_instruction(&instruction, parameter);
+
+            // 5. Increment cycle counter
+            let total_cycles = cycles + self.compute_extra_cycles(&instruction, &addressing_mode);
+            self.increment_cycle_counter(total_cycles);
         }
     }
 
@@ -268,470 +293,276 @@ impl CPU {  // Public functions
         let lsb = self.program_counter as u8;
         let msb = (self.program_counter >> 8) as u8;
         let mut status = self.status.clone();
-        // Set BRK flag depending on interrupt type
+        // Push BRK flag depending on interrupt type
         status.set(CpuStatus::BRK, interrupt.is_set_b_flag);
 
         self.push_to_stack(msb);
         self.push_to_stack(lsb);
         self.push_to_stack(status.bits());
 
+        // Set INT_DISABLE flag depending on interrupt type
         self.status.set(CpuStatus::INT_DISABLE, interrupt.is_hardware_interrupt);        
         self.program_counter = self.read_two_bytes(interrupt.vector);
     }
 
-    fn execute_instruction(&mut self, instruction: Instruction, parameter: Option<Param>) {
+    fn execute_instruction(&mut self, instruction: &Instruction, parameter: Param) {
         // FUTURE WORK: can probably condense this more, but not really necessary
-        match instruction {
-            Instruction::ADC => {
-                match parameter {
-                    Some(Param::Value(val)) => 
-                        self.adc(val),
-                    Some(Param::Address(mem_addr)) => {
-                        let byte = self.read_byte(mem_addr);
-                        self.adc(byte)
-                    },
-                    _ => panic!("Invalid parameter"),
-                }
+        match (instruction, parameter) {
+            (Instruction::ADC, Param::Value(val)) => {
+                self.adc(val)
             },
-            Instruction::AND => {
-                match parameter {
-                    Some(Param::Value(val)) => 
-                        self.and(val),
-                    Some(Param::Address(mem_addr)) => {
-                        let byte = self.read_byte(mem_addr);
-                        self.and(byte)
-                    }
-                    _ => panic!("Invalid parameter"),
-                }
+            (Instruction::ADC, Param::Address(mem_addr)) => {
+                let byte = self.read_byte(mem_addr);
+                self.adc(byte)
             },
-            Instruction::ASL => {
-                match parameter {
-                    Some(Param::Value(val)) => 
-                        self.asl_acc(val),
-                    Some(Param::Address(mem_addr)) => 
-                        self.asl(mem_addr),
-                    _ => panic!("Invalid parameter"),
-                }
+            (Instruction::AND, Param::Value(val)) => {
+                self.and(val)
             },
-            Instruction::BIT => {
-                match parameter {
-                    Some(Param::Value(val)) => 
-                        self.bit(val),
-                    Some(Param::Address(mem_addr)) => {
-                        let byte = self.read_byte(mem_addr);
-                        self.bit(byte)
-                    },
-                    _ => panic!("Invalid parameter"),
-                }
-            }
-            // Add branching here
-            Instruction::BPL => {
-                match parameter {
-                    Some(Param::Value(val)) => 
-                        self.bpl(val),
-                    _ => panic!("Invalid parameter"),
-                }
+            (Instruction::AND, Param::Address(mem_addr)) => {
+                let byte = self.read_byte(mem_addr);
+                self.and(byte)
             },
-            Instruction::BMI => {
-                match parameter {
-                    Some(Param::Value(val)) => 
-                        self.bmi(val),
-                    _ => panic!("Invalid parameter"),
-                }
+            (Instruction::ASL, Param::Value(val)) => {
+                self.asl_acc(val)
             },
-            Instruction::BVC => {
-                match parameter {
-                    Some(Param::Value(val)) => 
-                        self.bvc(val),
-                    _ => panic!("Invalid parameter"),
-                }
+            (Instruction::ASL, Param::Address(mem_addr)) => {
+                self.asl(mem_addr)
             },
-            Instruction::BVS => {
-                match parameter {
-                    Some(Param::Value(val)) => 
-                        self.bvs(val),
-                    _ => panic!("Invalid parameter"),
-                }
+            (Instruction::BIT, Param::Value(val)) => {
+                self.bit(val)
             },
-            Instruction::BCC => {
-                match parameter {
-                    Some(Param::Value(val)) => 
-                        self.bcc(val),
-                    _ => panic!("Invalid parameter"),
-                }
+            (Instruction::BIT, Param::Address(mem_addr)) => {
+                let byte = self.read_byte(mem_addr);
+                self.bit(byte)
             },
-            Instruction::BCS => {
-                match parameter {
-                    Some(Param::Value(val)) => 
-                        self.bcs(val),
-                    _ => panic!("Invalid parameter"),
-                }
+            // BRANCHING
+            (Instruction::BPL, Param::Value(val)) => {
+                self.bpl(val)
             },
-            Instruction::BNE => {
-                match parameter {
-                    Some(Param::Value(val)) => 
-                        self.bne(val),
-                    _ => panic!("Invalid parameter"),
-                }
+            (Instruction::BMI, Param::Value(val)) => {
+                self.bmi(val)
             },
-            Instruction::BEQ => {
-                match parameter {
-                    Some(Param::Value(val)) => 
-                        self.beq(val),
-                    _ => panic!("Invalid parameter"),
-                }
+            (Instruction::BVC, Param::Value(val)) => {
+                self.bvc(val)
             },
-            Instruction::BRK => {
-                match parameter {
-                    None =>
-                        self.brk(),
-                    _ => panic!("Invalid parameter"),
-                }
+            (Instruction::BVS, Param::Value(val)) => {
+                self.bvs(val)
             },
-            Instruction::CMP => {
-                match parameter {
-                    Some(Param::Value(val)) => 
-                        self.cmp(val),
-                    Some(Param::Address(mem_addr)) => {
-                        let byte = self.read_byte(mem_addr);
-                        self.cmp(byte)
-                    },
-                    _ => panic!("Invalid parameter"),
-                }
+            (Instruction::BCC, Param::Value(val)) => {
+                self.bcc(val)
             },
-            Instruction::CPX => {
-                match parameter {
-                    Some(Param::Value(val)) => 
-                        self.cpx(val),
-                    Some(Param::Address(mem_addr)) => {
-                        let byte = self.read_byte(mem_addr);
-                        self.cpx(byte)
-                    },
-                    _ => panic!("Invalid parameter"),
-                }
+            (Instruction::BCS, Param::Value(val)) => {
+                self.bcs(val)
             },
-            Instruction::CPY => {
-                match parameter {
-                    Some(Param::Value(val)) => 
-                        self.cpy(val),
-                    Some(Param::Address(mem_addr)) => {
-                        let byte = self.read_byte(mem_addr);
-                        self.cpy(byte)
-                    },
-                    _ => panic!("Invalid parameter"),
-                }
+            (Instruction::BNE, Param::Value(val)) => {
+                self.bne(val)
             },
-            Instruction::DEC => {
-                match parameter {
-                    Some(Param::Address(mem_addr)) => 
-                        self.dec(mem_addr),
-                    _ => panic!("Invalid parameter"),
-                }
+            (Instruction::BEQ, Param::Value(val)) => {
+                self.beq(val)
             },
-            Instruction::EOR => {
-                match parameter {
-                    Some(Param::Value(val)) => 
-                        self.eor(val),
-                    Some(Param::Address(mem_addr)) => {
-                        let byte = self.read_byte(mem_addr);
-                        self.eor(byte)
-                    },
-                    _ => panic!("Invalid parameter"),
-                }
+            (Instruction::BRK, Param::None) => {
+                self.brk() // TODO: remove this, should be an interrupt type
             },
-            Instruction::CLC => {
-                match parameter {
-                    None => 
-                        self.clc(),
-                    _ => panic!("Invalid parameter")
-                }
+            // COMPARISON
+            (Instruction::CMP, Param::Value(val)) => {
+                self.cmp(val)
             },
-            Instruction::SEC => {
-                match parameter {
-                    None => 
-                        self.sec(),
-                    _ => panic!("Invalid parameter")
-                }
+            (Instruction::CMP, Param::Address(mem_addr)) => {
+                let byte = self.read_byte(mem_addr);
+                self.cmp(byte)
+
             },
-            Instruction::CLI => {
-                match parameter {
-                    None => 
-                        self.cli(),
-                    _ => panic!("Invalid parameter")
-                }
+            (Instruction::CPX, Param::Value(val)) => {
+                self.cpx(val)
             },
-            Instruction::SEI => {
-                match parameter {
-                    None => 
-                        self.sei(),
-                    _ => panic!("Invalid parameter")
-                }
+            (Instruction::CPX, Param::Address(mem_addr)) => {
+                let byte = self.read_byte(mem_addr);
+                self.cpx(byte)
             },
-            Instruction::CLV => {
-                match parameter {
-                    None => 
-                        self.clv(),
-                    _ => panic!("Invalid parameter")
-                }
+            (Instruction::CPY, Param::Value(val)) => {
+                self.cpy(val)
             },
-            Instruction::CLD => {
-                match parameter {
-                    None => 
-                        self.cld(),
-                    _ => panic!("Invalid parameter")
-                }
+            (Instruction::CPY, Param::Address(mem_addr)) => {
+                let byte = self.read_byte(mem_addr);
+                self.cpy(byte)
             },
-            Instruction::SED => {
-                match parameter {
-                    None => 
-                        self.sed(),
-                    _ => panic!("Invalid parameter")
-                }
+            (Instruction::DEC, Param::Address(mem_addr)) => {
+                self.dec(mem_addr)
             },
-            Instruction::INC => {
-                match parameter {
-                    Some(Param::Address(mem_addr)) => 
-                        self.inc(mem_addr),
-                    _ => panic!("Invalid parameter"),
-                }
+            (Instruction::EOR, Param::Value(val)) => {
+                self.eor(val)
             },
-            Instruction::JMP => {
-                match parameter {
-                    Some(Param::Address(mem_addr)) => 
-                        self.jmp(mem_addr),
-                    _ => panic!("Invalid parameter"),
-                }
+            (Instruction::EOR, Param::Address(mem_addr)) => {
+                let byte = self.read_byte(mem_addr);
+                self.eor(byte)
             },
-            Instruction::JSR => {
-                match parameter {
-                    Some(Param::Address(mem_addr)) => 
-                        self.jsr(mem_addr),
-                    _ => panic!("Invalid parameter"),
-                }
+            (Instruction::CLC, Param::None) => {
+                self.clc()
             },
-            Instruction::LDA => {
-                match parameter {
-                    Some(Param::Value(val)) => 
-                        self.lda(val),
-                    Some(Param::Address(mem_addr)) => {
-                        let byte = self.read_byte(mem_addr);
-                        self.lda(byte)
-                    },
-                    _ => panic!("Invalid parameter"),
-                }
+            (Instruction::SEC, Param::None) => {
+                self.sec()
             },
-            Instruction::LDX => {
-                match parameter {
-                    Some(Param::Value(val)) => 
-                        self.ldx(val),
-                    Some(Param::Address(mem_addr)) => {
-                        let byte = self.read_byte(mem_addr);
-                        self.ldx(byte)
-                    },
-                    _ => panic!("Invalid parameter"),
-                }
+            (Instruction::CLI, Param::None) => {
+                self.cli()
             },
-            Instruction::LDY => {
-                match parameter {
-                    Some(Param::Value(val)) => 
-                        self.ldy(val),
-                    Some(Param::Address(mem_addr)) => {
-                        let byte = self.read_byte(mem_addr);
-                        self.ldy(byte)
-                    },
-                    _ => panic!("Invalid parameter"),
-                }
+            (Instruction::SEI, Param::None) => {
+                self.sei()
             },
-            Instruction::LSR => {
-                match parameter {
-                    // This should only ever be used for accumulator addressing mode
-                    Some(Param::Value(val)) => 
-                        self.lsr_acc(val),
-                    Some(Param::Address(mem_addr)) => 
-                        self.lsr(mem_addr),
-                    _ => panic!("Invalid parameter"),
-                }
+            (Instruction::CLV, Param::None) => {
+                self.clv()
             },
-            Instruction::NOP => {
+            (Instruction::CLD, Param::None) => {
+                self.cld()
+            },
+            (Instruction::SED, Param::None) => {
+                self.sed()
+            },
+            (Instruction::INC, Param::Address(mem_addr)) => {
+                self.inc(mem_addr)
+            },
+            (Instruction::JMP, Param::Address(mem_addr)) => {
+                self.jmp(mem_addr)
+            },
+            (Instruction::JSR, Param::Address(mem_addr)) => {
+                self.jsr(mem_addr)
+            },
+            (Instruction::LDA, Param::Value(val)) => {
+                self.lda(val)
+            },
+            (Instruction::LDA, Param::Address(mem_addr)) => {
+                let byte = self.read_byte(mem_addr);
+                self.lda(byte)
+            },
+            (Instruction::LDX, Param::Value(val)) => {
+                self.ldx(val)
+            },
+            (Instruction::LDX, Param::Address(mem_addr)) => {
+                let byte = self.read_byte(mem_addr);
+                self.ldx(byte)
+            },
+            (Instruction::LDY, Param::Value(val)) => {
+                self.ldy(val)
+            },
+            (Instruction::LDY, Param::Address(mem_addr)) => {
+                let byte = self.read_byte(mem_addr);
+                self.ldy(byte)
+            },
+            (Instruction::LSR, Param::Value(val)) => {
+                self.lsr_acc(val)
+            },
+            (Instruction::LSR, Param::Address(mem_addr)) => {
+                self.lsr(mem_addr)
+            },
+            (Instruction::NOP, Param::None) => {
                 // TODO: implement this?
+            },
+            (Instruction::ORA, Param::Value(val)) => {
+                self.ora(val)
+            },
+            (Instruction::ORA, Param::Address(mem_addr)) => {
+                let byte = self.read_byte(mem_addr);
+                self.ora(byte)
+            },
+            // REGISTER INSTRUCTIONS
+            (Instruction::TAX, Param::None) => {
+                self.tax()
+            },
+            (Instruction::TXA, Param::None) => {
+                self.txa()
+            },
+            (Instruction::DEX, Param::None) => {
+                self.dex()
+            },
+            (Instruction::INX, Param::None) => {
+                self.inx()
+            },
+            (Instruction::TAY, Param::None) => {
+                self.tay()
+            },
+            (Instruction::TYA, Param::None) => {
+                self.tya()
+            },
+            (Instruction::DEY, Param::None) => {
+                self.dey()
+            },
+            (Instruction::INY, Param::None) => {
+                self.iny()
+            },
+            (Instruction::ROL, Param::Value(val)) => {
+                self.rol_acc(val)
+            },
+            (Instruction::ROL, Param::Address(mem_addr)) => {
+                self.rol(mem_addr)
+            },
+            (Instruction::ROR, Param::Value(val)) => {
+                self.ror_acc(val)
+            },
+            (Instruction::ROR, Param::Address(mem_addr)) => {
+                self.ror(mem_addr)
+            },
+            (Instruction::RTI, Param::None) => {
+                self.rti()
+            },
+            (Instruction::RTS, Param::None) => {
+                self.rts()
+            },
+            (Instruction::SBC, Param::Value(val)) => {
+                self.sbc(val)
+            },
+            (Instruction::SBC, Param::Address(mem_addr)) => {
+                let byte = self.read_byte(mem_addr);
+                self.sbc(byte)
+            },
+            // STACK INSTRUCTIONS
+            (Instruction::TXS, Param::None) => {
+                self.txs()
+            },
+            (Instruction::TSX, Param::None) => {
+                self.tsx()
+            },
+            (Instruction::PHA, Param::None) => {
+                self.pha()
+            },
+            (Instruction::PLA, Param::None) => {
+                self.pla()
+            },
+            (Instruction::PHP, Param::None) => {
+                self.php()
+            },
+            (Instruction::PLP, Param::None) => {
+                self.plp()
+            },
+            (Instruction::STA, Param::Address(mem_addr)) => {
+                self.sta(mem_addr)
+            },
+            (Instruction::STX, Param::Address(mem_addr)) => {
+                self.stx(mem_addr)
+            },
+            (Instruction::STY, Param::Address(mem_addr)) => {
+                self.sty(mem_addr)
             }
-            Instruction::ORA => {
-                match parameter {
-                    Some(Param::Value(val)) => 
-                        self.ora(val),
-                    Some(Param::Address(mem_addr)) => {
-                        let byte = self.read_byte(mem_addr);
-                        self.ora(byte)
-                    },
-                    _ => panic!("Invalid parameter"),
-                }
-            },
-            // Register instructions
-            Instruction::TAX => {
-                match parameter {
-                    None => 
-                        self.tax(),
-                    _ => panic!("Invalid parameter"),
-                }
-            },
-            Instruction::TXA => {
-                match parameter {
-                    None => 
-                        self.txa(),
-                    _ => panic!("Invalid parameter"),
-                }
-            },
-            Instruction::DEX => {
-                match parameter {
-                    None => 
-                        self.dex(),
-                    _ => panic!("Invalid parameter"),
-                }
-            },
-            Instruction::INX => {
-                match parameter {
-                    None => 
-                        self.inx(),
-                    _ => panic!("Invalid parameter"),
-                }
-            },
-            Instruction::TAY => {
-                match parameter {
-                    None => 
-                        self.tay(),
-                    _ => panic!("Invalid parameter"),
-                }
-            },
-            Instruction::TYA => {
-                match parameter {
-                    None => 
-                        self.tya(),
-                    _ => panic!("Invalid parameter"),
-                }
-            },
-            Instruction::DEY => {
-                match parameter {
-                    None => 
-                        self.dey(),
-                    _ => panic!("Invalid parameter"),
-                }
-            },
-            Instruction::INY => {
-                match parameter {
-                    None => 
-                        self.iny(),
-                    _ => panic!("Invalid parameter"),
-                }
-            },
-            Instruction::ROL => {
-                match parameter {
-                    Some(Param::Value(val)) => 
-                        self.rol_acc(val),
-                    Some(Param::Address(mem_addr)) => 
-                        self.rol(mem_addr),
-                    _ => panic!("Invalid parameter"),
-                }
-            },
-            Instruction::ROR => {
-                match parameter {
-                    Some(Param::Value(val)) => 
-                        self.ror_acc(val),
-                    Some(Param::Address(mem_addr)) => 
-                        self.ror(mem_addr),
-                    _ => panic!("Invalid parameter"),
-                }
-            },
-            Instruction::RTI => {
-                match parameter {
-                    None => 
-                        self.rti(),
-                    _ => panic!("Invalid parameter"),
-                }
-            },
-            Instruction::RTS => {
-                match parameter {
-                    None => 
-                        self.rts(),
-                    _ => panic!("Invalid parameter"),
-                }
-            }
-            Instruction::SBC => {
-                match parameter {
-                    Some(Param::Value(val)) => 
-                        self.sbc(val),
-                    Some(Param::Address(mem_addr)) => {
-                        let byte = self.read_byte(mem_addr);
-                        self.sbc(byte)
-                    },
-                    _ => panic!("Invalid parameter"),
-                }
-            },
-            // Stack instructions
-            Instruction::TXS => {
-                match parameter {
-                    None => 
-                        self.txs(),
-                    _ => panic!("Invalid parameter"),
-                }
-            },
-            Instruction::TSX => {
-                match parameter {
-                    None => 
-                        self.tsx(),
-                    _ => panic!("Invalid parameter"),
-                }
-            },
-            Instruction::PHA => {
-                match parameter {
-                    None => 
-                        self.pha(),
-                    _ => panic!("Invalid parameter"),
-                }
-            },
-            Instruction::PLA => {
-                match parameter {
-                    None => 
-                        self.pla(),
-                    _ => panic!("Invalid parameter"),
-                }
-            },
-            Instruction::PHP => {
-                match parameter {
-                    None => 
-                        self.php(),
-                    _ => panic!("Invalid parameter"),
-                }
-            },
-            Instruction::PLP => {
-                match parameter {
-                    None => 
-                        self.plp(),
-                    _ => panic!("Invalid parameter"),
-                }
-            },
-            Instruction::STA => {
-                match parameter {
-                    Some(Param::Address(mem_addr)) => 
-                        self.sta(mem_addr),
-                    _ => panic!("Invalid parameter"),
-                }
-            },
-            Instruction::STX => {
-                match parameter {
-                    Some(Param::Address(mem_addr)) => 
-                        self.stx(mem_addr),
-                    _ => panic!("Invalid parameter"),
-                }
-            },
-            Instruction::STY => {
-                match parameter {
-                    Some(Param::Address(mem_addr)) => 
-                        self.sty(mem_addr),
-                    _ => panic!("Invalid parameter"),
-                }
-            },
-            _ => panic!("Not implemented"),
+            _ => panic!("Invalid")
         }
+    }
+
+    fn compute_extra_cycles(&self, instruction: &Instruction, addressing_mode: &AddressingMode) -> u8 {
+        match (instruction, addressing_mode) {
+            (Instruction::ADC | Instruction::AND | Instruction::CMP | Instruction::EOR |Instruction::LDA | 
+             Instruction::LDX | Instruction::LDY | Instruction::ORA | Instruction::SBC, 
+             AddressingMode::AbsoluteIndexX | AddressingMode::AbsoluteIndexY | AddressingMode::IndirectY) => {
+                self.page_cross_flag as u8
+            },
+            (Instruction::BPL | Instruction::BMI | Instruction::BVC | Instruction::BVS |
+             Instruction::BCC | Instruction::BCS | Instruction::BNE | Instruction::BEQ, _) => {
+                (self.branch_flag as u8) + ((self.branch_flag & self.page_cross_flag) as u8)
+            },
+            _ => 0
+        }
+    }
+
+    fn increment_cycle_counter(&mut self, cycles: u8) {
+        self.cycle_counter += cycles as usize;
+        self.bus.increment_ppu_cycle_counter(3 * cycles);
     }
 }
 
@@ -750,6 +581,12 @@ impl CPU {  // helper functions
 
     pub fn get_status(&self) -> u8 {
         self.status.bits()
+    }
+
+    pub fn get_clock_state(&self) -> (usize, usize, usize) {
+        // Returns the (CPU cycle, PPU scanline, PPU cycle) as a tuple
+        let (cur_scanline, ppu_cycle) = self.bus.get_ppu_cycle();
+        (self.cycle_counter, cur_scanline, ppu_cycle)
     }
 
     pub fn read_byte_from_pc(&mut self) -> u8 {
@@ -879,73 +716,97 @@ impl CPU {  // implement specific ISA instructions
 
     // Branching functions
     fn bpl(&mut self, parameter: u8) {
-        if !self.status.contains(CpuStatus::NEGATIVE) {
+        self.branch_flag = !self.status.contains(CpuStatus::NEGATIVE);
+        if self.branch_flag {
             // we need to left pad parameter with the bit 7 value
             // ex: 11111000 -> 1111111111111000
             let parameter = (parameter as i8) as u16;
+            let new_program_counter = self.program_counter.wrapping_add(parameter);
+            self.page_cross_flag = (new_program_counter >> 8) != (self.program_counter >> 8);
             self.program_counter = self.program_counter.wrapping_add(parameter);
         }
     }
 
     fn bmi(&mut self, parameter: u8) {
-        if self.status.contains(CpuStatus::NEGATIVE) {
+        self.branch_flag = self.status.contains(CpuStatus::NEGATIVE);
+        if self.branch_flag {
             // we need to left pad parameter with the bit 7 value
             // ex: 11111000 -> 1111111111111000
             let parameter = (parameter as i8) as u16;
+            let new_program_counter = self.program_counter.wrapping_add(parameter);
+            self.page_cross_flag = (new_program_counter >> 8) != (self.program_counter >> 8);
             self.program_counter = self.program_counter.wrapping_add(parameter);
         }
     }
 
     fn bvc(&mut self, parameter: u8) {
-        if !self.status.contains(CpuStatus::OVERFLOW) {
+        self.branch_flag = !self.status.contains(CpuStatus::OVERFLOW);
+        if self.branch_flag {
             // we need to left pad parameter with the bit 7 value
             // ex: 11111000 -> 1111111111111000
             let parameter = (parameter as i8) as u16;
+            let new_program_counter = self.program_counter.wrapping_add(parameter);
+            self.page_cross_flag = (new_program_counter >> 8) != (self.program_counter >> 8);
             self.program_counter = self.program_counter.wrapping_add(parameter);
         }
     }
 
     fn bvs(&mut self, parameter: u8) {
-        if self.status.contains(CpuStatus::OVERFLOW) {
+        self.branch_flag = self.status.contains(CpuStatus::OVERFLOW);
+        if self.branch_flag {
             // we need to left pad parameter with the bit 7 value
             // ex: 11111000 -> 1111111111111000
             let parameter = (parameter as i8) as u16;
+            let new_program_counter = self.program_counter.wrapping_add(parameter);
+            self.page_cross_flag = (new_program_counter >> 8) != (self.program_counter >> 8);
             self.program_counter = self.program_counter.wrapping_add(parameter);
         }
     }
 
     fn bcc(&mut self, parameter: u8) {
-        if !self.status.contains(CpuStatus::CARRY) {
+        self.branch_flag = !self.status.contains(CpuStatus::CARRY);
+        if self.branch_flag {
             // we need to left pad parameter with the bit 7 value
             // ex: 11111000 -> 1111111111111000
             let parameter = (parameter as i8) as u16;
+            let new_program_counter = self.program_counter.wrapping_add(parameter);
+            self.page_cross_flag = (new_program_counter >> 8) != (self.program_counter >> 8);
             self.program_counter = self.program_counter.wrapping_add(parameter);
         }
     }
 
     fn bcs(&mut self, parameter: u8) {
-        if self.status.contains(CpuStatus::CARRY) {
+        self.branch_flag = self.status.contains(CpuStatus::CARRY);
+        if self.branch_flag {
             // we need to left pad parameter with the bit 7 value
             // ex: 11111000 -> 1111111111111000
             let parameter = (parameter as i8) as u16;
+            let new_program_counter = self.program_counter.wrapping_add(parameter);
+            self.page_cross_flag = (new_program_counter >> 8) != (self.program_counter >> 8);
             self.program_counter = self.program_counter.wrapping_add(parameter);
         }
     }
 
     fn bne(&mut self, parameter: u8) {
-        if !self.status.contains(CpuStatus::ZERO) {
+        self.branch_flag = !self.status.contains(CpuStatus::ZERO);
+        if self.branch_flag {
             // we need to left pad parameter with the bit 7 value
             // ex: 11111000 -> 1111111111111000
             let parameter = (parameter as i8) as u16;
+            let new_program_counter = self.program_counter.wrapping_add(parameter);
+            self.page_cross_flag = (new_program_counter >> 8) != (self.program_counter >> 8);
             self.program_counter = self.program_counter.wrapping_add(parameter);
         }
     }
 
     fn beq(&mut self, parameter: u8) {
-        if self.status.contains(CpuStatus::ZERO) {
+        self.branch_flag = self.status.contains(CpuStatus::ZERO);
+        if self.branch_flag {
             // we need to left pad parameter with the bit 7 value
             // ex: 11111000 -> 1111111111111000
             let parameter = (parameter as i8) as u16;
+            let new_program_counter = self.program_counter.wrapping_add(parameter);
+            self.page_cross_flag = (new_program_counter >> 8) != (self.program_counter >> 8);
             self.program_counter = self.program_counter.wrapping_add(parameter);
         }
     }
@@ -1347,5 +1208,15 @@ impl CPU {  // implement specific ISA instructions
     fn sty(&mut self, address: u16) {
         // Affected Flags: None
         self.write_byte(address, self.reg_y);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_adc_cycles() {
+
     }
 }

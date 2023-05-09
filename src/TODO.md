@@ -7,6 +7,13 @@ BACKLOG
     - Found that for nestest, C004 is the correct reset vector, ref: https://forums.nesdev.org/viewtopic.php?t=14268
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+05/09/23
+ - Refactored CPU to produce cycle counts
+ - Added test (passes!)
+
+05/07/23
+ - Added tile_viewer.rs to test rendering a single tile (works!)
+
 05/03/23
  - Finished interrupt handler
 

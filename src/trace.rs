@@ -12,23 +12,12 @@ use crate::{
     traits::Memory
 };
 
-pub fn trace_cpu(cpu: &mut CPU) -> Result<String, String> {
+pub fn trace_cpu(cpu: &mut CPU, is_trace_cycles: bool) -> Result<String, String> {
     let prev_counter = cpu.program_counter;
-
-    // SOME TEMP STUFF FOR DEBUGGING:
-    // if prev_counter == 0xCFDB {
-    //     println!("Found {:04x} at 0x0080", cpu.read_byte(0x0080));
-    // }
-    // if prev_counter == 0xCFF2 {
-    //     println!("Found {:04x} at 0x00FF", cpu.read_byte(0x00FF));
-    //     println!("Found {:04x} at 0x0000", cpu.read_byte(0x0000));
-    //     println!("Found {:04x} at 0x0400", cpu.read_byte(0x0400));
-    //     println!("Found {:04x} at 0x0080", cpu.read_byte(0x0080));
-    // }
 
     // decode instruction and addressing mode
     let opcode = cpu.read_byte_from_pc();
-    let (instruction, addressing_mode) = decode_opcode(opcode)?;
+    let (instruction, addressing_mode, _) = decode_opcode(opcode)?;
 
     // parse instruction parameter 
     let param = cpu.read_arg(&addressing_mode);
@@ -70,28 +59,28 @@ pub fn trace_cpu(cpu: &mut CPU) -> Result<String, String> {
             format!("A")
         },
         // length 2
-        (_, AddressingMode::Immediate, Some(Param::Value(value))) => {
+        (_, AddressingMode::Immediate, Param::Value(value)) => {
             format!("#${:02x}", value)
         },
-        (_, AddressingMode::ZeroPage, Some(Param::Address(address))) => {
+        (_, AddressingMode::ZeroPage, Param::Address(address)) => {
             let stored_value = cpu.read_byte(address);
             format!("${:02x} = {:02x}", address, stored_value)
         },
-        (_, AddressingMode::ZeroPageIndexX, Some(Param::Address(address))) => {
+        (_, AddressingMode::ZeroPageIndexX, Param::Address(address)) => {
             let stored_value = cpu.read_byte(address);
             format!(
                 "${:02x},X @ {:02x} = {:02x}",
                 arg, address, stored_value
             )
         },
-        (_, AddressingMode::ZeroPageIndexY, Some(Param::Address(address))) => {
+        (_, AddressingMode::ZeroPageIndexY, Param::Address(address)) => {
             let stored_value = cpu.read_byte(address);
             format!(
                 "${:02x},Y @ {:02x} = {:02x}",
                 arg, address, stored_value
             )
         },
-        (_, AddressingMode::IndirectX, Some(Param::Address(address))) => {
+        (_, AddressingMode::IndirectX, Param::Address(address)) => {
             let stored_value = cpu.read_byte(address);
             format!(
                 "(${:02x},X) @ {:02x} = {:04x} = {:02x}",
@@ -101,7 +90,7 @@ pub fn trace_cpu(cpu: &mut CPU) -> Result<String, String> {
                 stored_value
             )
         },
-        (_, AddressingMode::IndirectY, Some(Param::Address(address))) => {
+        (_, AddressingMode::IndirectY, Param::Address(address)) => {
             let stored_value = cpu.read_byte(address);
             format!(
                 "(${:02x}),Y = {:04x} @ {:04x} = {:02x}",
@@ -117,24 +106,24 @@ pub fn trace_cpu(cpu: &mut CPU) -> Result<String, String> {
             format!("${:04x}", address)
         },
         // length 3
-        (_, AddressingMode::IndirectJump, Some(Param::Address(address))) => {
+        (_, AddressingMode::IndirectJump, Param::Address(address)) => {
             format!("(${:04x}) = {:04x}", arg, address)
         },
-        (_, AddressingMode::AbsoluteJump, Some(Param::Address(address))) => {
+        (_, AddressingMode::AbsoluteJump, Param::Address(address)) => {
             format!("${:04x}", address)
         },
-        (_, AddressingMode::Absolute, Some(Param::Address(address))) => {
+        (_, AddressingMode::Absolute, Param::Address(address)) => {
             let stored_value = cpu.read_byte(address);
             format!("${:04x} = {:02x}", address, stored_value)
         },
-        (_, AddressingMode::AbsoluteIndexX, Some(Param::Address(address))) => {
+        (_, AddressingMode::AbsoluteIndexX, Param::Address(address)) => {
             let stored_value = cpu.read_byte(address);
             format!(
                 "${:04x},X @ {:04x} = {:02x}",
                 arg, address, stored_value
             )
         },
-        (_, AddressingMode::AbsoluteIndexY, Some(Param::Address(address))) => {
+        (_, AddressingMode::AbsoluteIndexY, Param::Address(address)) => {
             let stored_value = cpu.read_byte(address);
             format!(
                 "${:04x},Y @ {:04x} = {:02x}",
@@ -145,8 +134,11 @@ pub fn trace_cpu(cpu: &mut CPU) -> Result<String, String> {
             panic!("Could not trace this argument {:?}, {:?}, {:?}", instruction, mode, param)
         }    
     };
+    // Get clock cycle information
+    let (cpu_cycle, cur_scanline, ppu_cycle) = cpu.get_clock_state();
 
-    // add strings together
+
+    // Add strings together
     let opstring = format!("{:?}", instruction);
     let hex_str = hex_dump
         .iter()
@@ -156,10 +148,15 @@ pub fn trace_cpu(cpu: &mut CPU) -> Result<String, String> {
     let asm_str = format!("{:04x}  {:8} {: >4} {}", prev_counter, hex_str, opstring, tmp)
         .trim()
         .to_string();
+    let clock_str = if is_trace_cycles {
+        format!(" PPU:{:>3},{:>3} CYC:{}", cur_scanline, ppu_cycle, cpu_cycle)
+    } else {
+        format!("")
+    };
 
     let trace = format!(
-        "{:47} A:{:02x} X:{:02x} Y:{:02x} P:{:02x} SP:{:02x}",
-        asm_str, cpu.reg_a, cpu.reg_x, cpu.reg_y, cpu.status, cpu.stack_pointer,
+        "{:47} A:{:02x} X:{:02x} Y:{:02x} P:{:02x} SP:{:02x}{}",
+        asm_str, cpu.reg_a, cpu.reg_x, cpu.reg_y, cpu.status, cpu.stack_pointer, clock_str
     )
     .to_ascii_uppercase();
 
@@ -183,7 +180,7 @@ fn test_format_trace_cpu() {
     cpu.reg_y = 3;
     let mut result: Vec<String> = vec![];
     cpu.run_with_callback(|cpu| {
-        if let Ok(s) = trace_cpu(cpu) {
+        if let Ok(s) = trace_cpu(cpu, false) {
             result.push(s);
         }
     });
@@ -221,7 +218,7 @@ fn test_format_mem_access() {
     cpu.reg_y = 0;
     let mut result: Vec<String> = vec![];
     cpu.run_with_callback(|cpu| {
-        if let Ok(s) = trace_cpu(cpu) {
+        if let Ok(s) = trace_cpu(cpu, false) {
             result.push(s);
         }
     });

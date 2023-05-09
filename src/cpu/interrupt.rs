@@ -26,3 +26,9 @@ pub const NMI_INTERRUPT: Interrupt = Interrupt {
     is_hardware_interrupt: true,
 };
 
+pub const IRQ_INTERRUPT: Interrupt = Interrupt {
+    kind: InterruptKind::IRQ,
+    vector: 0xFFFE,
+    is_set_b_flag: false,
+    is_hardware_interrupt: true,
+};

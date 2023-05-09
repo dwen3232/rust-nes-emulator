@@ -70,6 +70,11 @@ impl Bus {
         self.ppu.increment_cycle_counter(cycles)
     }
 
+    pub fn get_ppu_cycle(&self) -> (usize, usize) {
+        // Get both scanline and cycle as tuple
+        (self.ppu.cur_scanline, self.ppu.cycle_counter)
+    }
+
     pub fn poll_nmi_interrupt_signal(&mut self) -> Option<()> {
         self.ppu.nmi_interrupt_signal.take()
     }
