@@ -1,11 +1,13 @@
-// mod ram;
-// use rust_nes_emulator::screen::tile_viewer;
+use std::env;
+
 use rust_nes_emulator::screen::run;
 
 
 fn main() {
-    // run("game_roms/pacman.nes");
-    run("game_roms/donkeykong.nes");
-    // run("test_roms/color_test.nes");
-    // run("test_roms/full_nes_palette.nes");
+    let args: Vec<String> = env::args().collect();
+    if let Some(path) = args.get(1) {
+        run(path);
+    } else {
+        println!("Pass .nes file path to run")
+    }
 }

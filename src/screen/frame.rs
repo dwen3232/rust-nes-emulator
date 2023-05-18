@@ -24,41 +24,6 @@ impl Frame {
             self.data[WIDTH*y + x] = color;
         }
     }
-
-    fn background_palette(ppu: &PPU, tile_x: usize, tile_y: usize) -> [usize; 4] {
-        // Gets the palette for a background tile
-        let attribute_offset = 8 * (tile_y / 4) + (tile_x / 4);
-        let palette_byte = ppu.vram[0x03C0 + attribute_offset];
-        let background_palette = match ((tile_x % 4) / 2, (tile_y % 4) / 2) {
-            (0, 0) => palette_byte & 0b11,
-            (1, 0) => (palette_byte >> 2) & 0b11,
-            (0, 1) => (palette_byte >> 4) & 0b11,
-            (1, 1) => (palette_byte >> 6) & 0b11,
-            _ => panic!("impossible")
-        };
-        // $3F01-$3F03	Background palette 0
-        // $3F05-$3F07	Background palette 1
-        // $3F09-$3F0B	Background palette 2
-        // $3F0D-$3F0F	Background palette 3
-        let palette_offset = 4 * (background_palette as usize);
-        [
-            ppu.palette_table[0] as usize,
-            ppu.palette_table[palette_offset + 1] as usize,
-            ppu.palette_table[palette_offset + 2] as usize,
-            ppu.palette_table[palette_offset + 3] as usize,
-        ]
-    }
-
-    fn sprite_palette(ppu: &PPU, pallete_idx: u8) -> [usize; 4] {
-        // Gets the palette for a sprite
-        let start = 0x11 + (pallete_idx * 4) as usize;
-        [
-            0,  // Always transparent
-            ppu.palette_table[start] as usize,
-            ppu.palette_table[start + 1] as usize,
-            ppu.palette_table[start + 2] as usize,
-        ]
-    }
     
     pub fn render(&mut self, ppu: &PPU) {
         // Renders the background
@@ -151,5 +116,40 @@ impl Frame {
 
     pub fn as_bytes_ref(&self) -> &[u8; 3 * WIDTH * HEIGHT] {
         unsafe { transmute(&self.data) }
+    }
+
+    fn background_palette(ppu: &PPU, tile_x: usize, tile_y: usize) -> [usize; 4] {
+        // Gets the palette for a background tile
+        let attribute_offset = 8 * (tile_y / 4) + (tile_x / 4);
+        let palette_byte = ppu.vram[0x03C0 + attribute_offset];
+        let background_palette = match ((tile_x % 4) / 2, (tile_y % 4) / 2) {
+            (0, 0) => palette_byte & 0b11,
+            (1, 0) => (palette_byte >> 2) & 0b11,
+            (0, 1) => (palette_byte >> 4) & 0b11,
+            (1, 1) => (palette_byte >> 6) & 0b11,
+            _ => panic!("impossible")
+        };
+        // $3F01-$3F03	Background palette 0
+        // $3F05-$3F07	Background palette 1
+        // $3F09-$3F0B	Background palette 2
+        // $3F0D-$3F0F	Background palette 3
+        let palette_offset = 4 * (background_palette as usize);
+        [
+            ppu.palette_table[0] as usize,
+            ppu.palette_table[palette_offset + 1] as usize,
+            ppu.palette_table[palette_offset + 2] as usize,
+            ppu.palette_table[palette_offset + 3] as usize,
+        ]
+    }
+
+    fn sprite_palette(ppu: &PPU, pallete_idx: u8) -> [usize; 4] {
+        // Gets the palette for a sprite
+        let start = 0x11 + (pallete_idx * 4) as usize;
+        [
+            0,  // Always transparent
+            ppu.palette_table[start] as usize,
+            ppu.palette_table[start + 1] as usize,
+            ppu.palette_table[start + 2] as usize,
+        ]
     }
 }

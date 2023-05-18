@@ -172,6 +172,10 @@ impl PPU {
         if self.cycle_counter < 341 {
             return false;
         }
+        if self.is_sprite_zero_hit() {
+            // sprite zero hit flag is reset on vblank
+            self.ppustatus.set_sprite_zero_hit(true);
+        }
         self.cycle_counter = self.cycle_counter - 341;
         self.cur_scanline += 1;
 
@@ -191,6 +195,12 @@ impl PPU {
         return false;
     }
 
+    fn is_sprite_zero_hit(&self) -> bool {
+        let y = self.oam_data[0] as usize;
+        let x = self.oam_data[3] as usize;
+        // we check <= cycle_counter because ppu is not being simulated tick by tick
+        (y ==self.cur_scanline) && (x <= self.cycle_counter) && self.ppumask.is_show_sprites()
+    }
 }
 
 // $0000-$0FFF	$1000	Pattern table 0

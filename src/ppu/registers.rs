@@ -119,6 +119,22 @@ impl PpuMask {
     pub fn write(&mut self, data: u8) {
         *self = PpuMask::from_bits_truncate(data)
     }
+
+    pub fn is_show_background_leftmost(&self) -> bool {
+        self.contains(PpuMask::BACKGROUND_LEFTMOST)
+    }
+
+    pub fn is_show_sprites_leftmost(&self) -> bool {
+        self.contains(PpuMask::SPRITES_LEFTMOST)
+    }
+
+    pub fn is_show_background(&self) -> bool {
+        self.contains(PpuMask::SHOW_BACKGROUND)
+    }
+
+    pub fn is_show_sprites(&self) -> bool {
+        self.contains(PpuMask::SHOW_SPRITES)
+    }
 }
 
 bitflags! {

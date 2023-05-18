@@ -46,8 +46,8 @@ pub fn run(path: &str) {
     let mut key_map = HashMap::new();
     key_map.insert(Keycode::A, ControllerState::A);
     key_map.insert(Keycode::S, ControllerState::B);
-    key_map.insert(Keycode::Space, ControllerState::SELECT);
-    key_map.insert(Keycode::Return, ControllerState::START);
+    key_map.insert(Keycode::Q, ControllerState::SELECT);
+    key_map.insert(Keycode::W, ControllerState::START);
     key_map.insert(Keycode::Up, ControllerState::UP);
     key_map.insert(Keycode::Down, ControllerState::DOWN);
     key_map.insert(Keycode::Left, ControllerState::LEFT);

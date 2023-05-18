@@ -1,6 +1,6 @@
 TODO
  - Implement general interrupt poller
- - Figure out palette rendering bugs
+ - Scrolling
 
 BACKLOG
  - CPU reset (specifically, the program counter. Why subtract 4?)
