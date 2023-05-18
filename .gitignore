@@ -2,3 +2,4 @@ target/
 game_roms/
 .vscode/
 Cargo.lock
+TODO.md
