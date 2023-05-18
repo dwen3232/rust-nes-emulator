@@ -3,6 +3,7 @@
 pub mod cpu;
 pub mod ppu;
 pub mod cartridge;
-pub mod display;
+pub mod screen;
 pub mod trace;
 pub mod traits;
+pub mod controller;

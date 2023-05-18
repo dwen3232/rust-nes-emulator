@@ -31,8 +31,9 @@ fn test_cpu_official_opcodes_nestest() {
 
     let mut cpu = CPU::new_empty();
     let mut result: Vec<String> = vec![];
-    cpu.run_nes_with_callback(
-        "test_roms/nestest.nes",
+    cpu.load_nes("test_roms/nestest.nes");
+    cpu.program_counter = cpu.read_two_bytes(0xFFFC) - 4;
+    cpu.run_with_callback(
         |cpu| { 
             if let Ok(s) = trace_cpu(cpu, false) {
                 writeln!(f, "{}", s).expect("Couldn't write line");
@@ -71,14 +72,14 @@ fn test_cpu_ppu_timings() {
     
         let mut cpu = CPU::new_empty();
         let mut result: Vec<String> = vec![];
-        cpu.run_nes_with_callback(
-            "test_roms/nestest.nes",
+        cpu.load_nes("test_roms/nestest.nes");
+        cpu.program_counter = cpu.read_two_bytes(0xFFFC) - 4;
+        cpu.increment_cycle_counter(7);
+        cpu.run_with_callback(
             |cpu| { 
                 if let Ok(s) = trace_cpu(cpu, true) {
                     writeln!(f, "{}", s).expect("Couldn't write line");
                     result.push(s);
-                } else {
-    
                 }
             }
         ).unwrap_or_default();

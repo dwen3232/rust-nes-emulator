@@ -277,3 +277,16 @@ impl PpuAddr {
     
 }
 
+#[cfg(test)]
+mod tests {
+    use bitflags::BitFlags;
+
+    use super::*;
+
+    #[test]
+    fn test_write_ppuctrl() {
+        let mut ctrl = PpuControl::from_bits_retain(0);
+        ctrl.write(0b0000_0011);
+        assert_eq!(0b0000_0011, ctrl.bits());
+    }
+}

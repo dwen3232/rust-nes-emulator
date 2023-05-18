@@ -7,7 +7,7 @@ use bitflags::bitflags;
 
 use simple_logging::log_to_file;
 
-use crate::traits::Memory;
+use crate::{traits::Memory, ppu::PPU};
 
 pub mod bus;
 use bus::Bus;
@@ -58,8 +58,7 @@ bitflags! {
 const STACK_POINTER_INIT: u8 = 0xFD;
 const PROGRAM_COUNTER_INIT: u16 = 0x600;
 
-#[derive(Debug)]
-pub struct CPU {
+pub struct CPU<'bus> {
     // General purpose registers
     pub reg_a: u8,
     pub reg_x: u8,
@@ -73,11 +72,12 @@ pub struct CPU {
     page_cross_flag: bool,
     branch_flag: bool,
 
-    bus: Bus,
+    bus: Bus<'bus>,
     cycle_counter: usize,
+    // callback: Box<dyn FnMut(&mut CPU)>
 }
 
-impl CPU {  // Decoding
+impl CPU<'_> {  // Decoding
     pub fn read_arg(&mut self, mode: &AddressingMode) -> Param {
         // Based on the addressing mode, read `n` number of argument bytes from the program and process it into a parameter
         // to be used by some instruction
@@ -176,12 +176,12 @@ impl CPU {  // Decoding
     }
 }
 
-impl CPU {  // Public functions
+impl<'a> CPU<'a> {  // Public functions
     pub fn new_empty() -> Self {
         CPU::new(Bus::new_empty())
     }
 
-    pub fn new(bus: Bus) -> Self {
+    pub fn new<'bus>(bus: Bus<'bus>) -> CPU<'bus> {
         CPU {
             reg_a: 0,
             reg_x: 0,
@@ -193,10 +193,12 @@ impl CPU {  // Public functions
             page_cross_flag: false,
             branch_flag: false,
             bus: bus,
-            cycle_counter: 0
+            cycle_counter: 0,
         }
     }
+}
 
+impl CPU<'_> {
     pub fn reset(&mut self) {
         self.reg_a = 0;
         self.reg_x = 0;
@@ -204,27 +206,13 @@ impl CPU {  // Public functions
         self.stack_pointer = STACK_POINTER_INIT;
         // self.status = CpuStatus::ALWAYS | CpuStatus::BRK;
         self.status = CpuStatus::ALWAYS | CpuStatus::INT_DISABLE;
-        self.program_counter = self.read_two_bytes(0xFFFC) - 4; // TEST: trying out subtracting one
+        self.program_counter = self.read_two_bytes(0xFFFC); // TEST: trying out subtracting one
         // self.program_counter = self.read_two_bytes(0xFFFC); // TEST: trying out subtracting one
         self.increment_cycle_counter(7);
     }
 
     pub fn load_nes(&mut self, path: &str) {
         self.bus.load_nes(path);
-    }
-
-    pub fn run_nes(&mut self, path: &str) -> Result<(), String>  {
-        self.run_nes_with_callback(path, |_| {})
-    }
-
-    pub fn run_nes_with_callback<F>(&mut self, path: &str, mut callback: F) -> Result<(), String> 
-    where
-        F: FnMut(&mut CPU)
-    {
-        self.load_nes(path);
-        self.reset();
-        println!("Program Counter after reset: {:x}", self.program_counter);
-        self.run_with_callback(callback)
     }
 
     pub fn load_program(&mut self, program: Vec<u8>) {
@@ -234,20 +222,6 @@ impl CPU {  // Public functions
         }
     }
 
-    pub fn run_program(&mut self, program: Vec<u8>) -> Result<(), String> {
-        self.run_program_with_callback(program, |_| {})
-    }
-
-    pub fn run_program_with_callback<F>(&mut self, program: Vec<u8>, mut callback: F) -> Result<(), String>
-    where
-        F: FnMut(&mut CPU)
-    {
-        self.load_program(program);
-        self.reset();
-        self.program_counter = 0x0600;
-        self.run_with_callback(callback)
-    }
-
     pub fn run(&mut self) -> Result<(), String> {
         self.run_with_callback(|_| {})
     }
@@ -255,7 +229,7 @@ impl CPU {  // Public functions
     pub fn run_with_callback<F>(&mut self, mut callback: F) -> Result<(), String> 
     where
         F: FnMut(&mut CPU)
-    { 
+    {
         // This function will take in a program, and execute it step by step
         // TODO: result is Result<()), String> right now, need to change to something more descriptive
         loop {
@@ -560,13 +534,13 @@ impl CPU {  // Public functions
         }
     }
 
-    fn increment_cycle_counter(&mut self, cycles: u8) {
+    pub fn increment_cycle_counter(&mut self, cycles: u8) {
         self.cycle_counter += cycles as usize;
         self.bus.increment_ppu_cycle_counter(3 * cycles);
     }
 }
 
-impl Memory for CPU {
+impl Memory for CPU<'_> {
     fn read_byte(&mut self, index: u16) -> u8 {
         // must increment program counter before the attempted read returns None
         self.bus.read_byte(index)
@@ -577,8 +551,7 @@ impl Memory for CPU {
     }
 }
 
-impl CPU {  // helper functions
-
+impl CPU<'_> {  // helper functions
     pub fn get_status(&self) -> u8 {
         self.status.bits()
     }
@@ -587,6 +560,10 @@ impl CPU {  // helper functions
         // Returns the (CPU cycle, PPU scanline, PPU cycle) as a tuple
         let (cur_scanline, ppu_cycle) = self.bus.get_ppu_cycle();
         (self.cycle_counter, cur_scanline, ppu_cycle)
+    }
+
+    pub fn get_ppu_ref(&self) -> &PPU {
+        &self.bus.ppu
     }
 
     pub fn read_byte_from_pc(&mut self) -> u8 {
@@ -643,7 +620,7 @@ impl CPU {  // helper functions
 
 }
 
-impl CPU {  // implement specific ISA instructions
+impl CPU<'_> {  // implement specific ISA instructions
     fn adc(&mut self, parameter: u8) {
         /// Affects Flags: N V Z C
 

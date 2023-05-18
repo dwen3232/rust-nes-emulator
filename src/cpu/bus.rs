@@ -17,6 +17,7 @@
 use core::panic;
 
 use crate::cartridge::ROM;
+use crate::controller::Controller;
 use crate::ppu::PPU;
 use crate::traits::Memory;
 
@@ -36,29 +37,39 @@ const PRG_ROM_END: u16 =    0xFFFF;
 const RAM_MASK: u16 = (0b1 << 11) -1;
 const PPU_MASK: u16 = (0b1 << 3) - 1;
 
-#[derive(Debug)]
-pub struct Bus {
+pub struct Bus<'callback> {
     ram: [u8; 0x800],   // 2KB RAM
-    ppu: PPU,
+    pub ppu: PPU,
     prg_rom: Vec<u8>,
+
+    controller: Controller,
     apuio_reg: [u8; 0x20],
+
+    ppu_callback: Box<dyn FnMut(&PPU, &mut Controller) + 'callback>
 }
 
 
-impl Bus {
+impl Bus<'_> {
     pub fn new_empty() -> Self {
-        Bus::new(ROM::new_empty())
+        Bus::new(ROM::new_empty(), |_, _| {})
     }
 
-    pub fn new(cartridge: ROM) -> Self {
+    pub fn new<'callback, F>(cartridge: ROM, ppu_callback: F) -> Bus<'callback>
+    where
+        F: FnMut(&PPU, &mut Controller) + 'callback
+    {
         Bus {
             ram: [0; 0x800],
             ppu: PPU::new(cartridge.chr_rom, cartridge.mirroring),
             prg_rom: cartridge.prg_rom,
+            controller: Controller::new(),
             apuio_reg: [0; 0x20],
+            ppu_callback: Box::from(ppu_callback)
         }
     }
+}
 
+impl Bus<'_> {
     pub fn load_nes(&mut self, path: &str) {
         let rom = ROM::create_from_nes(path).expect("Path does not exist");
         self.prg_rom = rom.prg_rom;
@@ -67,7 +78,10 @@ impl Bus {
     }
 
     pub fn increment_ppu_cycle_counter(&mut self, cycles: u8) {
-        self.ppu.increment_cycle_counter(cycles)
+        if self.ppu.increment_cycle_counter(cycles) {
+            // println!("{:?}", self.get_ppu_cycle());
+            (self.ppu_callback)(&self.ppu, &mut self.controller);
+        }
     }
 
     pub fn get_ppu_cycle(&self) -> (usize, usize) {
@@ -80,7 +94,7 @@ impl Bus {
     }
 }
 
-impl Memory for Bus {
+impl Memory for Bus<'_> {
     fn write_byte(&mut self, index: u16, value: u8) {
         match index {
             RAM_START ..= RAM_END => {
@@ -100,6 +114,18 @@ impl Memory for Bus {
                     _ => panic!("Invalid PPU_REG index")
                 }
             },
+            0x4014 => {
+                let mut buffer: [u8; 256] = [0; 256];
+                let hi: u16 = (value as u16) << 8;
+                for i in 0..256u16 {
+                    buffer[i as usize] = self.read_byte(hi + i);
+                }
+
+                self.ppu.write_oamdma(&buffer);
+            }
+            0x4016 => {
+                self.controller.write(value);
+            }
             APUIO_START ..= APUIO_END => {
                 let mut index = index - APUIO_START;
                 self.apuio_reg[index as usize] = value;
@@ -110,7 +136,7 @@ impl Memory for Bus {
         }
     }
 
-    fn read_byte(&mut self, index: u16) -> u8{
+    fn read_byte(&mut self, index: u16) -> u8 {
         match index {
             RAM_START ..= RAM_END => {
                 self.ram[(index & RAM_MASK) as usize]
@@ -128,6 +154,9 @@ impl Memory for Bus {
                     7 => self.ppu.read_ppudata(),
                     _ => panic!("Invalid PPU_REG index")
                 }
+            },
+            0x4016 => {
+                self.controller.read()
             },
             APUIO_START ..= APUIO_END => {
                 let mut index = index - APUIO_START;

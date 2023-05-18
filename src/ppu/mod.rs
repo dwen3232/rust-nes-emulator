@@ -26,18 +26,16 @@ use super::cartridge::Mirroring;
 // OAMDMA	$4014	aaaa aaaa	OAM DMA high address
 
 // OAM data, 64 sprites each occupying 4 bytes, so 256 bytes in total
-#[derive(Debug)]
 pub struct PPU {
     pub chr_rom: Vec<u8>,
     pub vram: [u8; 0x800],
     pub oam_data: [u8; 256],
-    // pub palette_table: [u8; 32],
+    pub palette_table: [u8; 32],
     // registers
-    ppuctrl: PpuControl,
+    pub ppuctrl: PpuControl,
     ppumask: PpuMask,
     ppustatus:PpuStatus,
     oamaddr: OamAddr,
-    // oamdata: OamData,
     ppuscroll: PpuScroll,
     ppuaddr: PpuAddr,
     ppudata: u8,
@@ -47,7 +45,7 @@ pub struct PPU {
     pub cycle_counter: usize,
     pub cur_scanline: usize, 
 
-    pub nmi_interrupt_signal: Option<()>,
+    pub nmi_interrupt_signal: Option<()>
 }
 
 impl PPU {
@@ -56,6 +54,7 @@ impl PPU {
             chr_rom: chr_rom,
             vram: [0; 0x800],
             oam_data: [0; 256],
+            palette_table: [0; 32],
             ppuctrl: PpuControl::from_bits_retain(0),
             ppumask: PpuMask::from_bits_retain(0),
             ppustatus: PpuStatus::from_bits_retain(0),
@@ -66,14 +65,16 @@ impl PPU {
             mirroring: mirroring,
             cycle_counter: 0,
             cur_scanline: 0,
-            nmi_interrupt_signal: None,
+            nmi_interrupt_signal: None
         }
     }
 
     pub fn new_empty_chr_rom(mirroring: Mirroring) -> Self {
         PPU::new(vec![0; 2048], mirroring)
     }
+}
 
+impl PPU {
     pub fn write_ppuctrl(&mut self, data: u8) {
         let prev_is_generate_nmi = self.ppuctrl.is_generate_nmi();
         self.ppuctrl.write(data);
@@ -165,11 +166,11 @@ impl PPU {
         return new_vram_index
     }
 
-    pub fn increment_cycle_counter(&mut self, cycles: u8) {
+    pub fn increment_cycle_counter(&mut self, cycles: u8) -> bool {
         self.cycle_counter += cycles as usize;
         // cycle_counter loops back to 0 at 341 and increments cur_scalenline
         if self.cycle_counter < 341 {
-            return;
+            return false;
         }
         self.cycle_counter = self.cycle_counter - 341;
         self.cur_scanline += 1;
@@ -185,7 +186,9 @@ impl PPU {
             self.nmi_interrupt_signal = None;
             self.ppustatus.set_vblank_started(false);
             self.ppustatus.set_sprite_zero_hit(false);
+            return true;
         }
+        return false;
     }
 
 }
@@ -231,12 +234,19 @@ impl Memory for PPU {
             },
             0x3000..=0x3EFF => {
                 // map to 0x2000...0x2EFF
-                let masked_index = index & 0b1110_1111_1111_1111;   
+                let masked_index = index & 0b1110_1111_1111_1111;
                 let vram_index = self.mirror_vram_addr(masked_index);
                 self.vram[vram_index as usize] = value;
             },
-            0x3F00..=0x3F1F => todo!(),
-            0x3F20..=0x3FFF => todo!(),
+            0x3F00..=0x3FFF => {
+                // 0x3F20..=0x3FFF mirrors 0x3F00..=0x3FFF
+                let masked_index = index & 0b0000_0000_0001_1111;
+                let palette_index = match masked_index {
+                    0x0010 | 0x0014 | 0x0018 | 0x001C => masked_index - 0x10,
+                    _ => masked_index
+                };
+                self.palette_table[palette_index as usize] = value;
+            },
             _ => panic!("Unexpected address")
         }
     }

@@ -166,7 +166,7 @@ pub fn trace_cpu(cpu: &mut CPU, is_trace_cycles: bool) -> Result<String, String>
 
 #[test]
 fn test_format_trace_cpu() {
-    let mut bus = Bus::new(test_rom());
+    let mut bus = Bus::new(test_rom(), |_, _| {});
     bus.write_byte(100, 0xa2);
     bus.write_byte(101, 0x01);
     bus.write_byte(102, 0xca);
@@ -200,7 +200,7 @@ fn test_format_trace_cpu() {
 
 #[test]
 fn test_format_mem_access() {
-    let mut bus = Bus::new(test_rom());
+    let mut bus = Bus::new(test_rom(), |_, _| {});
     // ORA ($33), Y
     bus.write_byte(100, 0x11);
     bus.write_byte(101, 0x33);
