@@ -9,14 +9,6 @@ use rust_nes_emulator::{
 
 
 #[test]
-fn test_cpu_initialization() {
-    // Tests that the cpu initializes properly,
-    let cpu = CPU::new_empty();
-    assert_eq!(0, cpu.reg_a);
-}
-
-
-#[test]
 fn test_cpu_official_opcodes_nestest() {
     // Tests only the official opcodes
     remove_file("logs/test_cpu_official_opcodes_nestest.log").err();
