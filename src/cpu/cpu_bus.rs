@@ -43,7 +43,7 @@ pub struct CpuBus<'a, 'b, 'c, 'd> {
     ram_state: [u8; 0x800],     // 2KB RAM
     pub cpu_state: &'a mut CpuState,    // 
     ppu_state: &'b mut PpuState,
-    rom_state: &'c ROM,
+    pub rom_state: &'c ROM,
     con_state: &'d mut Controller,
     apuio_reg: [u8; 0x20],
 }

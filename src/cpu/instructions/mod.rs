@@ -7,8 +7,9 @@ use decode::decode_opcode;
 pub use execute::execute_instruction;
 pub use parse::parse_instruction;
 
+type CpuCycleUnit = u8;
 
-pub type CpuCycleUnit = u8;
+#[derive(Debug, Clone, Copy)]
 pub struct Instruction {
     pub opcode: Opcode,
     pub param: Param,
@@ -16,7 +17,7 @@ pub struct Instruction {
 }
 
 // TODO! This is a misuse of Enums, make Opcode an Enum with no value and change the current implementation to a struct
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Opcode { // Reorder these at some point to something more logical
     ADC, 
     AND, 
@@ -80,14 +81,14 @@ pub enum Opcode { // Reorder these at some point to something more logical
     STY,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Param {    // used by an instruction
     Value(u8),
     Address(u16),
     None
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum AddressingMode {
     Implicit,           // implicit
     Accumulator,        // val = A

@@ -1,5 +1,5 @@
 use crate::cpu::{
-    CpuBus, CpuStatus, CpuState
+    CpuBus, CpuStatus, CpuState, cpu_bus, self
 };
 use crate::common::Memory;
 use super::{Opcode, Param, Instruction};
@@ -8,36 +8,36 @@ use super::{Opcode, Param, Instruction};
 
 
 // TODO: maybe make a class called Bus which wraps the CpuBus and the RAM state?
-pub fn execute_instruction(cpu_bus: &mut CpuBus, instruction: Instruction) -> Result<(), String>{
+pub fn execute_instruction(cpu_bus: &mut CpuBus, instruction: &Instruction) -> Result<(), String>{
     // FUTURE WORK: can probably condense this more, but not really necessary
-    let Instruction{ opcode, param, cycles } = instruction;
+    let Instruction{ opcode, param, cycles } = *instruction;
     // TODO: will these instructions ever throw an error?
     match (opcode, param) {
         (Opcode::ADC, Param::Value(val)) => {
             adc(cpu_bus.cpu_state, val)
         },
         (Opcode::ADC, Param::Address(mem_addr)) => {
-            let byte = cpu_bus.cpu_state.read_byte(mem_addr);
+            let byte = cpu_bus.read_byte(mem_addr);
             adc(cpu_bus.cpu_state, byte)
         },
         (Opcode::AND, Param::Value(val)) => {
             and(cpu_bus.cpu_state, val)
         },
         (Opcode::AND, Param::Address(mem_addr)) => {
-            let byte = cpu_bus.cpu_state.read_byte(mem_addr);
+            let byte = cpu_bus.read_byte(mem_addr);
             and(cpu_bus.cpu_state, byte)
         },
         (Opcode::ASL, Param::Value(val)) => {
             asl_acc(cpu_bus.cpu_state, val)
         },
         (Opcode::ASL, Param::Address(mem_addr)) => {
-            asl(cpu_bus.cpu_state, mem_addr)
+            asl(cpu_bus, mem_addr)
         },
         (Opcode::BIT, Param::Value(val)) => {
             bit(cpu_bus.cpu_state, val)
         },
         (Opcode::BIT, Param::Address(mem_addr)) => {
-            let byte = cpu_bus.cpu_state.read_byte(mem_addr);
+            let byte = cpu_bus.read_byte(mem_addr);
             bit(cpu_bus.cpu_state, byte)
         },
         // BRANCHING
@@ -73,7 +73,7 @@ pub fn execute_instruction(cpu_bus: &mut CpuBus, instruction: Instruction) -> Re
             cmp(cpu_bus.cpu_state, val)
         },
         (Opcode::CMP, Param::Address(mem_addr)) => {
-            let byte = cpu_bus.cpu_state.read_byte(mem_addr);
+            let byte = cpu_bus.read_byte(mem_addr);
             cmp(cpu_bus.cpu_state, byte)
 
         },
@@ -81,24 +81,24 @@ pub fn execute_instruction(cpu_bus: &mut CpuBus, instruction: Instruction) -> Re
             cpx(cpu_bus.cpu_state, val)
         },
         (Opcode::CPX, Param::Address(mem_addr)) => {
-            let byte = cpu_bus.cpu_state.read_byte(mem_addr);
+            let byte = cpu_bus.read_byte(mem_addr);
             cpx(cpu_bus.cpu_state, byte)
         },
         (Opcode::CPY, Param::Value(val)) => {
             cpy(cpu_bus.cpu_state, val)
         },
         (Opcode::CPY, Param::Address(mem_addr)) => {
-            let byte = cpu_bus.cpu_state.read_byte(mem_addr);
+            let byte = cpu_bus.read_byte(mem_addr);
             cpy(cpu_bus.cpu_state, byte)
         },
         (Opcode::DEC, Param::Address(mem_addr)) => {
-            dec(cpu_bus.cpu_state, mem_addr)
+            dec(cpu_bus, mem_addr)
         },
         (Opcode::EOR, Param::Value(val)) => {
             eor(cpu_bus.cpu_state, val)
         },
         (Opcode::EOR, Param::Address(mem_addr)) => {
-            let byte = cpu_bus.cpu_state.read_byte(mem_addr);
+            let byte = cpu_bus.read_byte(mem_addr);
             eor(cpu_bus.cpu_state, byte)
         },
         (Opcode::CLC, Param::None) => {
@@ -123,7 +123,7 @@ pub fn execute_instruction(cpu_bus: &mut CpuBus, instruction: Instruction) -> Re
             sed(cpu_bus.cpu_state)
         },
         (Opcode::INC, Param::Address(mem_addr)) => {
-            inc(cpu_bus.cpu_state, mem_addr)
+            inc(cpu_bus, mem_addr)
         },
         (Opcode::JMP, Param::Address(mem_addr)) => {
             jmp(cpu_bus.cpu_state, mem_addr)
@@ -135,28 +135,28 @@ pub fn execute_instruction(cpu_bus: &mut CpuBus, instruction: Instruction) -> Re
             lda(cpu_bus.cpu_state, val)
         },
         (Opcode::LDA, Param::Address(mem_addr)) => {
-            let byte = cpu_bus.cpu_state.read_byte(mem_addr);
+            let byte = cpu_bus.read_byte(mem_addr);
             lda(cpu_bus.cpu_state, byte)
         },
         (Opcode::LDX, Param::Value(val)) => {
             ldx(cpu_bus.cpu_state, val)
         },
         (Opcode::LDX, Param::Address(mem_addr)) => {
-            let byte = cpu_bus.cpu_state.read_byte(mem_addr);
+            let byte = cpu_bus.read_byte(mem_addr);
             ldx(cpu_bus.cpu_state, byte)
         },
         (Opcode::LDY, Param::Value(val)) => {
             ldy(cpu_bus.cpu_state, val)
         },
         (Opcode::LDY, Param::Address(mem_addr)) => {
-            let byte = cpu_bus.cpu_state.read_byte(mem_addr);
+            let byte = cpu_bus.read_byte(mem_addr);
             ldy(cpu_bus.cpu_state, byte)
         },
         (Opcode::LSR, Param::Value(val)) => {
             lsr_acc(cpu_bus.cpu_state, val)
         },
         (Opcode::LSR, Param::Address(mem_addr)) => {
-            lsr(cpu_bus.cpu_state, mem_addr)
+            lsr(cpu_bus, mem_addr)
         },
         (Opcode::NOP, Param::None) => {
             todo!()
@@ -165,7 +165,7 @@ pub fn execute_instruction(cpu_bus: &mut CpuBus, instruction: Instruction) -> Re
             ora(cpu_bus.cpu_state, val)
         },
         (Opcode::ORA, Param::Address(mem_addr)) => {
-            let byte = cpu_bus.cpu_state.read_byte(mem_addr);
+            let byte = cpu_bus.read_byte(mem_addr);
             ora(cpu_bus.cpu_state, byte)
         },
         // REGISTER INSTRUCTIONS
@@ -197,13 +197,13 @@ pub fn execute_instruction(cpu_bus: &mut CpuBus, instruction: Instruction) -> Re
             rol_acc(cpu_bus.cpu_state, val)
         },
         (Opcode::ROL, Param::Address(mem_addr)) => {
-            rol(cpu_bus.cpu_state, mem_addr)
+            rol(cpu_bus, mem_addr)
         },
         (Opcode::ROR, Param::Value(val)) => {
             ror_acc(cpu_bus.cpu_state, val)
         },
         (Opcode::ROR, Param::Address(mem_addr)) => {
-            ror(cpu_bus.cpu_state, mem_addr)
+            ror(cpu_bus, mem_addr)
         },
         (Opcode::RTI, Param::None) => {
             rti(cpu_bus)
@@ -215,7 +215,7 @@ pub fn execute_instruction(cpu_bus: &mut CpuBus, instruction: Instruction) -> Re
             sbc(cpu_bus.cpu_state, val)
         },
         (Opcode::SBC, Param::Address(mem_addr)) => {
-            let byte = cpu_bus.cpu_state.read_byte(mem_addr);
+            let byte = cpu_bus.read_byte(mem_addr);
             sbc(cpu_bus.cpu_state, byte)
         },
         // STACK INSTRUCTIONS
@@ -238,13 +238,13 @@ pub fn execute_instruction(cpu_bus: &mut CpuBus, instruction: Instruction) -> Re
             plp(cpu_bus)
         },
         (Opcode::STA, Param::Address(mem_addr)) => {
-            sta(cpu_bus.cpu_state, mem_addr)
+            sta(cpu_bus, mem_addr)
         },
         (Opcode::STX, Param::Address(mem_addr)) => {
-            stx(cpu_bus.cpu_state, mem_addr)
+            stx(cpu_bus, mem_addr)
         },
         (Opcode::STY, Param::Address(mem_addr)) => {
-            sty(cpu_bus.cpu_state, mem_addr)
+            sty(cpu_bus, mem_addr)
         }
         _ => panic!("Invalid")
     };
@@ -300,15 +300,15 @@ pub fn asl_acc(cpu_state: &mut CpuState, parameter: u8) {
     cpu_state.set_carry_flag(result);
 }
 
-pub fn asl(cpu_state: &mut CpuState, address: u16) {
+pub fn asl(cpu_bus: &mut CpuBus, address: u16) {
     // Affects Flags: N Z C
-    let parameter = cpu_state.read_byte(address);
+    let parameter = cpu_bus.read_byte(address);
     let result = (parameter as u16) << 1;
-    cpu_state.write_byte(address, result as u8);
+    cpu_bus.write_byte(address, result as u8);
 
-    cpu_state.set_negative_flag(result as u8);
-    cpu_state.set_zero_flag(result as u8);
-    cpu_state.set_carry_flag(result);
+    cpu_bus.cpu_state.set_negative_flag(result as u8);
+    cpu_bus.cpu_state.set_zero_flag(result as u8);
+    cpu_bus.cpu_state.set_carry_flag(result);
 }
 
 pub fn bit(cpu_state: &mut CpuState, parameter: u8) {
@@ -466,13 +466,13 @@ pub fn cpy(cpu_state: &mut CpuState, parameter: u8) {
     }
 }
 
-pub fn dec(cpu_state: &mut CpuState, address: u16) {
+pub fn dec(cpu_bus: &mut CpuBus, address: u16) {
     // Affects Flags: N Z
-    let result = cpu_state.read_byte(address).wrapping_sub(1);
-    cpu_state.write_byte(address, result);
+    let result = cpu_bus.read_byte(address).wrapping_sub(1);
+    cpu_bus.write_byte(address, result);
 
-    cpu_state.set_negative_flag(result);
-    cpu_state.set_zero_flag(result);
+    cpu_bus.cpu_state.set_negative_flag(result);
+    cpu_bus.cpu_state.set_zero_flag(result);
 }
 
 pub fn eor(cpu_state: &mut CpuState, parameter: u8) {
@@ -519,13 +519,13 @@ pub fn sed(cpu_state: &mut CpuState) {
     cpu_state.status.insert(CpuStatus::DECIMAL);
 }
 
-pub fn inc(cpu_state: &mut CpuState, address: u16) {
+pub fn inc(cpu_bus: &mut CpuBus, address: u16) {
     // Affects Flags: N Z
-    let result = cpu_state.read_byte(address).wrapping_add(1);
-    cpu_state.write_byte(address, result);
+    let result = cpu_bus.read_byte(address).wrapping_add(1);
+    cpu_bus.write_byte(address, result);
 
-    cpu_state.set_negative_flag(result);
-    cpu_state.set_zero_flag(result);
+    cpu_bus.cpu_state.set_negative_flag(result);
+    cpu_bus.cpu_state.set_zero_flag(result);
 }
 
 pub fn jmp(cpu_state: &mut CpuState, address: u16) {
@@ -584,20 +584,19 @@ pub fn lsr_acc(cpu_state: &mut CpuState, parameter: u8) {
     }
 }
 
-pub fn lsr(cpu_state: &mut CpuState, address: u16) {
+pub fn lsr(cpu_bus: &mut CpuBus, address: u16) {
     // Affects Flags: N Z C
-    // I think this writes to reg_a? Not sure
-    let parameter = cpu_state.read_byte(address);
+    let parameter = cpu_bus.read_byte(address);
     let result = parameter >> 1;
-    cpu_state.write_byte(address, result);
+    cpu_bus.write_byte(address, result);
 
-    cpu_state.set_negative_flag(result);
-    cpu_state.set_zero_flag(result);
+    cpu_bus.cpu_state.set_negative_flag(result);
+    cpu_bus.cpu_state.set_zero_flag(result);
     // Special carry flag case
     if parameter % 2 == 1 {
-        cpu_state.status.insert(CpuStatus::CARRY);
+        cpu_bus.cpu_state.status.insert(CpuStatus::CARRY);
     } else {
-        cpu_state.status.remove(CpuStatus::CARRY);
+        cpu_bus.cpu_state.status.remove(CpuStatus::CARRY);
     }
 }
 
@@ -686,18 +685,18 @@ pub fn rol_acc(cpu_state: &mut CpuState, parameter: u8) {
     cpu_state.set_carry_flag(result);
 }
 
-pub fn rol(cpu_state: &mut CpuState, address: u16) {
+pub fn rol(cpu_bus: &mut CpuBus, address: u16) {
     // Affects Flags: N Z C
-    let parameter = cpu_state.read_byte(address);
+    let parameter = cpu_bus.read_byte(address);
     let mut result = (parameter as u16) << 1;
-    if cpu_state.status.contains(CpuStatus::CARRY) {
+    if cpu_bus.cpu_state.status.contains(CpuStatus::CARRY) {
         result += 1;    // this should be safe from overflow
     }
-    cpu_state.write_byte(address, result as u8);
+    cpu_bus.write_byte(address, result as u8);
 
-    cpu_state.set_negative_flag(result as u8);
-    cpu_state.set_zero_flag(result as u8);
-    cpu_state.set_carry_flag(result);
+    cpu_bus.cpu_state.set_negative_flag(result as u8);
+    cpu_bus.cpu_state.set_zero_flag(result as u8);
+    cpu_bus.cpu_state.set_carry_flag(result);
 }
 
 pub fn ror_acc(cpu_state: &mut CpuState, parameter: u8) {
@@ -718,22 +717,22 @@ pub fn ror_acc(cpu_state: &mut CpuState, parameter: u8) {
     }
 }
 
-pub fn ror(cpu_state: &mut CpuState, address: u16) {
+pub fn ror(cpu_bus: &mut CpuBus, address: u16) {
     // Affects Flags: N Z C
-    let parameter = cpu_state.read_byte(address);
+    let parameter = cpu_bus.read_byte(address);
     let mut result = parameter >> 1;
-    if cpu_state.status.contains(CpuStatus::CARRY) {
+    if cpu_bus.cpu_state.status.contains(CpuStatus::CARRY) {
         result += 0b1000_0000;
     }
-    cpu_state.write_byte(address, result);
+    cpu_bus.write_byte(address, result);
     
-    cpu_state.set_negative_flag(result);
-    cpu_state.set_zero_flag(result);
+    cpu_bus.cpu_state.set_negative_flag(result);
+    cpu_bus.cpu_state.set_zero_flag(result);
     // Special carry flag case
     if parameter % 2 == 1 {
-        cpu_state.status.insert(CpuStatus::CARRY);
+        cpu_bus.cpu_state.status.insert(CpuStatus::CARRY);
     } else {
-        cpu_state.status.remove(CpuStatus::CARRY);
+        cpu_bus.cpu_state.status.remove(CpuStatus::CARRY);
     }
 }
 
@@ -802,17 +801,17 @@ pub fn plp(cpu_bus: &mut CpuBus) {
     cpu_bus.cpu_state.status.insert(CpuStatus::ALWAYS);
 }
 
-pub fn sta(cpu_state: &mut CpuState, address: u16) {
+pub fn sta(cpu_bus: &mut CpuBus, address: u16) {
     // Affected Flags: None
-    cpu_state.write_byte(address, cpu_state.reg_a);
+    cpu_bus.write_byte(address, cpu_bus.cpu_state.reg_a);
 }
 
-pub fn stx(cpu_state: &mut CpuState, address: u16) {
+pub fn stx(cpu_bus: &mut CpuBus, address: u16) {
     // Affected Flags: None
-    cpu_state.write_byte(address, cpu_state.reg_x);
+    cpu_bus.write_byte(address, cpu_bus.cpu_state.reg_x);
 }
 
-pub fn sty(cpu_state: &mut CpuState, address: u16) {
+pub fn sty(cpu_bus: &mut CpuBus, address: u16) {
     // Affected Flags: None
-    cpu_state.write_byte(address, cpu_state.reg_y);
+    cpu_bus.write_byte(address, cpu_bus.cpu_state.reg_y);
 }

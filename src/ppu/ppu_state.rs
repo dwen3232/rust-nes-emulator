@@ -370,10 +370,6 @@ impl OamAddr {
 
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct OamData {
-
-}
 
 #[derive(Debug, Clone, Copy)]
 pub struct PpuScroll {

@@ -21,7 +21,7 @@ pub struct CpuState {
     pub page_cross_flag: bool,
     pub branch_flag: bool,
 
-    cycle_counter: usize,
+    pub cycle_counter: usize,
 }
 
 impl CpuState {
@@ -61,16 +61,6 @@ impl CpuState {
     }
 
     pub fn set_zero_flag(&mut self, byte: u8) {
-        todo!()
-    }
-}
-
-impl Memory for CpuState {
-    fn read_byte(&mut self, index: u16) -> u8 {
-        todo!()
-    }
-
-    fn write_byte(&mut self, index: u16, value: u8) {
         todo!()
     }
 }

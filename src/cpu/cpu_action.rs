@@ -4,7 +4,7 @@ use crate::controller::Controller;
 
 use super::instructions::{
     parse_instruction,
-    execute_instruction,
+    execute_instruction, Instruction,
 };
 use super::{CPU, CpuState, CpuBus};
 
@@ -29,13 +29,18 @@ impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
 }
 
 impl CPU for CpuAction<'_, '_, '_, '_> {
-    fn next_cpu_instruction(&mut self) -> Result<(), String> {
-        let instruction = parse_instruction(self.cpu_state, &self.rom_state.prg_rom)?;
+    fn next_cpu_instruction(&mut self) -> Result<Instruction, String> {
+        // parse_instruction has side effects
+        // TODO: this actually requires CPU bus, since the Param needs to read from memory if it's indirect
         let mut cpu_bus = CpuBus::new(self.cpu_state, &mut self.ppu_state, &self.rom_state, self.con_state);
-        execute_instruction(&mut cpu_bus, instruction)?;
+        let instruction = parse_instruction(&mut cpu_bus)?;
+
+        // create bus and execute instruction with it
+        
+        execute_instruction(&mut cpu_bus, &instruction)?;
 
         
-        Ok(())
+        Ok(instruction)
     }
 
     fn reset(&mut self) {

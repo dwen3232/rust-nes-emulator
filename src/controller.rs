@@ -4,7 +4,7 @@ use bitflags::bitflags;
 
 bitflags! {
     // https://www.nesdev.org/wiki/Standard_controller
-    #[derive(Clone, Copy)]
+    #[derive(Debug, Clone, Copy)]
     pub struct ControllerState: u8 {
         const A        = 0b00000001;
         const B        = 0b00000010;
@@ -17,6 +17,7 @@ bitflags! {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct Controller {
     strobe: bool,
     cur_flag: u8,

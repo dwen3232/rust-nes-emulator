@@ -29,13 +29,13 @@ const PLAYCHOICE_MASK: u8 =  0b0000_0010;
 
 
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Mirroring {
     Vertical, Horizontal, FourScreen,
 }
 
 // Representation for a cartridge. Uses .nes file format
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct ROM {
     pub mirroring: Mirroring,
     pub mapper: u8,
