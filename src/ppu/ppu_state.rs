@@ -1,14 +1,13 @@
 use bitflags::bitflags;
 
-use crate::{rom::{Mirroring, ROM}, common::Memory};
-
-use super::PpuBus;
+use crate::rom::{Mirroring, ROM};
 
 
 
 #[derive(Debug, Clone, Copy)]
 pub struct PpuState {
-    // pub chr_rom: Vec<u8>, // ! This is in ROM
+    pub ram: [u8; 0x800],
+
     pub oam_data: [u8; 256],
     
     // registers
@@ -21,16 +20,16 @@ pub struct PpuState {
     pub ppudata: PpuData,
 
     // signals
-    pub nmi_interrupt_signal: Option<()>,
+    pub nmi_interrupt_poll: Option<()>,
 
     // metadata
     pub cycle_counter: usize,
     pub cur_scanline: usize, 
 }
-
 impl PpuState {
     pub fn new() -> Self {
         PpuState {
+            ram: [0; 0x800],
             oam_data: [0; 256],
             ppuctrl: PpuControl::from_bits_retain(0),
             ppumask: PpuMask::from_bits_retain(0),
@@ -41,117 +40,8 @@ impl PpuState {
             ppudata: 0,
             cycle_counter: 0,
             cur_scanline: 0,
-            nmi_interrupt_signal: None
+            nmi_interrupt_poll: None
         }
-    }
-
-    pub fn write_ppuctrl(&mut self, data: u8) {
-        let prev_is_generate_nmi = self.ppuctrl.is_generate_nmi();
-        self.ppuctrl.write(data);
-        let is_vblank_started = self.ppustatus.is_vblank_started();
-        let cur_is_generate_nmi = self.ppuctrl.is_generate_nmi();
-        // Set NMI Interrupt signal if PPU is in VBLANK and GENERATE_NMI changes from 0 to 1
-        if !prev_is_generate_nmi && cur_is_generate_nmi && is_vblank_started {
-            self.nmi_interrupt_signal = Some(())
-        }
-    }
-
-    pub fn write_ppumask(&mut self, data: u8) {
-        self.ppumask.write(data);
-    }
-
-    pub fn read_ppustatus(&mut self) -> u8 {
-        let bits = self.ppustatus.bits();
-        self.ppustatus.remove(PpuStatus::VBLANK_STARTED);
-        self.ppuscroll.reset();
-        self.ppuaddr.reset();
-        bits
-    }
-
-    pub fn write_oamaddr(&mut self, data: u8) {
-        self.oamaddr.write(data);
-    }
-
-    pub fn write_oamdata(&mut self, data: u8) {
-        self.oam_data[self.oamaddr.read() as usize] = data;
-        self.oamaddr.increment();
-    }
-
-    pub fn write_oamdma(&mut self, data: &[u8; 256]) {
-        for byte in data.iter() {
-            self.oam_data[self.oamaddr.read() as usize] = *byte;
-            self.oamaddr.increment();
-        }
-    }
-
-    pub fn read_oamdata(&self) -> u8 {
-        self.oam_data[self.oamaddr.read() as usize]
-    }
-
-    pub fn write_ppuscroll(&mut self, data: u8) {
-        self.ppuscroll.write(data);
-    }
-
-    pub fn write_ppuaddr(&mut self, data: u8) {
-        self.ppuaddr.write(data);
-    }
-
-    pub fn read_ppudata(&mut self, rom_state: &ROM) -> u8 {
-        let addr = self.ppuaddr.read();
-        // Retrieve previous value in buffer
-        let result = self.ppudata;
-        // Store in ppudata as buffer
-        let mut ppu_bus = PpuBus::new(self, rom_state);
-        self.ppudata = ppu_bus.read_byte(addr);
-        // Increment address
-        let inc_value = self.ppuctrl.get_vram_addr_inc_value();
-        self.ppuaddr.increment(inc_value);
-        return result;
-    }
-
-    pub fn write_ppudata(&mut self, rom_state: &ROM, data: u8) {
-        let addr = self.ppuaddr.read();
-        let mut ppu_bus = PpuBus::new(self, rom_state);
-        ppu_bus.write_byte(addr, data);
-        // Increment address
-        let inc_value = self.ppuctrl.get_vram_addr_inc_value();
-        self.ppuaddr.increment(inc_value);
-    }
-
-    pub fn increment_cycle_counter(&mut self, cycles: u8) -> bool {
-        self.cycle_counter += cycles as usize;
-        // cycle_counter loops back to 0 at 341 and increments cur_scalenline
-        if self.cycle_counter < 341 {
-            return false;
-        }
-        if self.is_sprite_zero_hit() {
-            // sprite zero hit flag is reset on vblank
-            self.ppustatus.set_sprite_zero_hit(true);
-        }
-        self.cycle_counter = self.cycle_counter - 341;
-        self.cur_scanline += 1;
-
-        if self.cur_scanline == 241 {
-            self.ppustatus.set_vblank_started(true);
-            self.ppustatus.set_sprite_zero_hit(false);
-            if self.ppuctrl.is_generate_nmi() {
-                self.nmi_interrupt_signal = Some(());
-            }
-        } else if self.cur_scanline >= 262 {
-            self.cur_scanline = 0;
-            self.nmi_interrupt_signal = None;
-            self.ppustatus.set_vblank_started(false);
-            self.ppustatus.set_sprite_zero_hit(false);
-            return true;
-        }
-        return false;
-    }
-
-    fn is_sprite_zero_hit(&self) -> bool {
-        let y = self.oam_data[0] as usize;
-        let x = self.oam_data[3] as usize;
-        // we check <= cycle_counter because ppu is not being simulated tick by tick
-        (y ==self.cur_scanline) && (x <= self.cycle_counter) && self.ppumask.is_show_sprites()
     }
 }
 
@@ -448,17 +338,3 @@ impl PpuAddr {
 }
 
 type PpuData = u8;
-
-#[cfg(test)]
-mod tests {
-    use bitflags::bitflags;
-
-    use super::*;
-
-    #[test]
-    fn test_write_ppuctrl() {
-        let mut ctrl = PpuControl::from_bits_retain(0);
-        ctrl.write(0b0000_0011);
-        assert_eq!(0b0000_0011, ctrl.bits());
-    }
-}

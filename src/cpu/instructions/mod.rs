@@ -1,11 +1,8 @@
 mod decode;
-mod parse;
-mod execute;
 
-use decode::decode_opcode;
+pub use decode::decode_opcode;
 
-pub use execute::execute_instruction;
-pub use parse::parse_instruction;
+// pub use parse::parse_instruction;
 
 type CpuCycleUnit = u8;
 
@@ -13,7 +10,15 @@ type CpuCycleUnit = u8;
 pub struct Instruction {
     pub opcode: Opcode,
     pub param: Param,
+    pub meta: InstructionMetaData,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct InstructionMetaData {
     pub cycles: CpuCycleUnit,
+    pub mode: AddressingMode,
+    pub raw_opcode: u8,
+    pub length: u16,
 }
 
 // TODO! This is a misuse of Enums, make Opcode an Enum with no value and change the current implementation to a struct

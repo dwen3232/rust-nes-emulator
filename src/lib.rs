@@ -1,6 +1,5 @@
 #![allow(dead_code, unused, unused_imports)]
 
-mod common;
 pub mod nes;
 pub mod cpu;
 pub mod ppu;

@@ -49,6 +49,15 @@ impl Controller {
         value
     }
 
+    pub fn peek(&self) -> u8 {
+        if self.cur_flag == 0 {
+            return 1;
+        }
+        let cur_flag = ControllerState::from_bits_retain(self.cur_flag);
+        let value = if self.controller_state.contains(cur_flag) { 1 } else { 0 };
+        value
+    }
+
     pub fn write(&mut self, data: u8) {
         self.cur_flag = 1;
         self.strobe = (data & 1) == 1;

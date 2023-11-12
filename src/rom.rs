@@ -27,6 +27,8 @@ const FOUR_SCREEN_MASK: u8 = 0b0000_1000;
 const VS_UNISYS_MASK: u8 =   0b0000_0001;
 const PLAYCHOICE_MASK: u8 =  0b0000_0010;
 
+pub const PRG_ROM_SIZE: usize = PRG_ROM_PAGE_SIZE * u8::MAX as usize;
+pub const CHR_ROM_SIZE: usize = CHR_ROM_PAGE_SIZE * u8::MAX as usize;
 
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -40,8 +42,8 @@ pub struct ROM {
     pub mirroring: Mirroring,
     pub mapper: u8,
     // pub prg_rom: Vec<u8>,
-    pub prg_rom: [u8; PRG_ROM_PAGE_SIZE * u8::MAX as usize],
-    pub chr_rom: [u8; CHR_ROM_PAGE_SIZE * u8::MAX as usize],
+    pub prg_rom: [u8; PRG_ROM_SIZE],
+    pub chr_rom: [u8; CHR_ROM_SIZE],
     // pub chr_rom: Vec<u8>,
 }
 

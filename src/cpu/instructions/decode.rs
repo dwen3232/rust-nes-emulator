@@ -1,6 +1,11 @@
+// * THIS IS COMPLETE
 use super::{Opcode, AddressingMode, CpuCycleUnit};
 
 
+/// Decodes a raw byte to
+///     1. An Opcode corresponding to the instruction type
+///     2. An AddressingMode describing how the instruction Param will be used
+///     3. The base number of cycles the instruction will use
 pub fn decode_opcode(opcode: u8) -> Result<(Opcode, AddressingMode, CpuCycleUnit), String> {
     // Used this reference for decoding opcodes to Opcode addressing mode pairs
     // Ref: http://www.6502.org/tutorials/6502opcodes.html#LDA
