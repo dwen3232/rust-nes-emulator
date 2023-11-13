@@ -20,7 +20,9 @@ pub trait NES {
     
     // Loads a program
     // TODO: this should directly require a ROM object
-    fn load_rom(&mut self, rom: ROM) -> Result<(), String>;
+    fn set_rom(&mut self, rom: ROM) -> Result<(), String>;
+
+    fn load_from_path(&mut self, path: &str) -> Result<(), String>;
 
     // Resets the console
     fn reset(&mut self) -> Result<(), String>;
@@ -32,16 +34,27 @@ pub trait NES {
     fn peek_ppu_state(&self) -> PpuState;
 }
 
-#[derive(Debug, Clone)]
-struct ActionNES {
-    cpu_state: CpuState,
+#[derive(Debug)]
+pub struct ActionNES {
+    // TODO: change testing logic so that cpu_state doesn't have to be public!
+    pub cpu_state: CpuState,
     ppu_state: PpuState,
     controller: Controller,
     rom: ROM,
-    program_trace: ProgramTrace
+    // TODO: make this not pub
+    pub program_trace: ProgramTrace
 }
 
 impl ActionNES {
+    pub fn new() -> Self {
+        println!("test");
+        ActionNES { 
+            cpu_state: CpuState::new(), 
+            ppu_state: PpuState::new(), 
+            controller: Controller::new(), 
+            rom: ROM::new(),
+            program_trace: vec![] }
+    }
     // TODO: may want to revisit how this is done? Maybe implement From?
     fn as_cpu_action(&mut self) -> CpuAction {
         CpuAction::new(&mut self.cpu_state, &mut self.ppu_state, &mut self.controller, &self.rom)
@@ -49,11 +62,12 @@ impl ActionNES {
 
     // fn as_ppu_action(&mut self) -> PpuAction {}
 
-    fn as_cpu_bus(&mut self) -> CpuBus {
+    // TODO: change testing logic so that this doesn't have to be public!
+    pub fn as_cpu_bus(&mut self) -> CpuBus {
         CpuBus::new(&mut self.cpu_state, &mut self.ppu_state, &mut self.controller, &self.rom)
     }
 
-    fn log_trace(&mut self, instruction: &Instruction) -> Result<(), String> {
+    fn log_trace(&mut self, instruction: &Instruction, original_cpu_state: &CpuState, original_ppu_state: &PpuState) -> Result<(), String> {
         let Instruction { opcode, param, meta } = *instruction;
         let InstructionMetaData { cycles, mode, raw_opcode, length } = meta;
 
@@ -61,23 +75,28 @@ impl ActionNES {
         // add opcode byte to dump
         hex_dump.push(raw_opcode);
 
-        let prev_counter = self.cpu_state.program_counter - length;
+        let CpuState { reg_a, reg_x, reg_y, status, program_counter, stack_pointer, cycle_counter, ..} = *original_cpu_state;
+        let cpu_cycle = cycle_counter;
+
+        let PpuState { cur_scanline, cycle_counter, .. } = *original_ppu_state;
+        let ppu_cycle = cycle_counter;
+
         // get the parsed arg as a u16
         let arg = match length {
             1 => 0,
             2 => {
-                let address: u8 = self.as_cpu_bus().peek_byte(prev_counter + 1);
+                let address: u8 = self.as_cpu_bus().peek_byte(program_counter + 1);
                 hex_dump.push(address);
                 address as u16
             },
             3 => {
                 
-                let address_lo = self.as_cpu_bus().peek_byte(prev_counter + 1);
-                let address_hi = self.as_cpu_bus().peek_byte(prev_counter + 2);
+                let address_lo = self.as_cpu_bus().peek_byte(program_counter + 1);
+                let address_hi = self.as_cpu_bus().peek_byte(program_counter + 2);
                 hex_dump.push(address_lo);
                 hex_dump.push(address_hi);
 
-                let address = self.as_cpu_bus().peek_two_bytes(prev_counter + 1);
+                let address = self.as_cpu_bus().peek_two_bytes(program_counter + 1);
                 address
             },
             _ => {panic!()}
@@ -134,7 +153,7 @@ impl ActionNES {
             },
             (_, AddressingMode::Relative, _) => {
                 let address: usize =
-                (prev_counter as usize + 2).wrapping_add((arg as i8) as usize);
+                (program_counter as usize + 2).wrapping_add((arg as i8) as usize);
                 format!("${:04x}", address)
             },
             // length 3
@@ -167,19 +186,17 @@ impl ActionNES {
             }    
         };
         // Get clock cycle information
-        let cpu_cycle = self.cpu_state.cycle_counter;
-        let cur_scanline = self.ppu_state.cur_scanline;
-        let ppu_cycle = self.ppu_state.cycle_counter;
+        
 
 
         // Add strings together
-        let opstring = format!("{:?}", instruction);
+        let opstring = format!("{:?}", opcode);
         let hex_str = hex_dump
             .iter()
             .map(|z| format!("{:02x}", z))
             .collect::<Vec<String>>()
             .join(" ");
-        let asm_str = format!("{:04x}  {:8} {: >4} {}", prev_counter, hex_str, opstring, tmp)
+        let asm_str = format!("{:04x}  {:8} {: >4} {}", program_counter, hex_str, opstring, tmp)
             .trim()
             .to_string();
         let clock_str = format!(" PPU:{:>3},{:>3} CYC:{}", cur_scanline, ppu_cycle, cpu_cycle);
@@ -191,8 +208,7 @@ impl ActionNES {
 
         let trace = format!(
             "{:47} A:{:02x} X:{:02x} Y:{:02x} P:{:02x} SP:{:02x}{}",
-            asm_str, self.cpu_state.reg_a, self.cpu_state.reg_x, self.cpu_state.reg_y, 
-            self.cpu_state.status, self.cpu_state.stack_pointer, clock_str
+            asm_str, reg_a, reg_x, reg_y, status, stack_pointer, clock_str
         )
         .to_ascii_uppercase();
 
@@ -204,9 +220,11 @@ impl ActionNES {
 impl NES for ActionNES {
     // Updates state to after next CPU instruction
     fn next_cpu_instruction(&mut self) -> Result<Instruction, String> {
+        let original_cpu_state = self.cpu_state.clone();
+        let original_ppu_state = self.ppu_state.clone();
         let instruction = self.as_cpu_action().next_cpu_instruction()?;
         // ! NOTE: we responsibility to stop program at BRK is up to caller
-        self.log_trace(&instruction)?;
+        self.log_trace(&instruction, &original_cpu_state, &original_ppu_state)?;
         Ok(instruction)
     }
 
@@ -217,9 +235,13 @@ impl NES for ActionNES {
     }
     
     // Loads a program
-    fn load_rom(&mut self, rom: ROM) -> Result<(), String>{
-        // self.rom_state = rom;
+    fn set_rom(&mut self, rom: ROM) -> Result<(), String>{
+        self.rom = rom;
         Ok(())
+    }
+
+    fn load_from_path(&mut self, path: &str) -> Result<(), String> {
+        self.set_rom(ROM::create_from_nes(path)?)
     }
 
     // Resets the console

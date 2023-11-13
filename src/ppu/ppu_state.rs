@@ -338,3 +338,13 @@ impl PpuAddr {
 }
 
 type PpuData = u8;
+
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_initialization() {
+        let ppu_state: PpuState = PpuState::new();
+        assert_eq!([0; 256], ppu_state.oam_data)
+    }
+}

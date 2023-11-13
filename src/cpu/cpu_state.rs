@@ -77,3 +77,14 @@ bitflags! {
         const NEGATIVE =    0b1000_0000;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_initialization() {
+        let cpu_state = CpuState::new();
+        assert_eq!(0, cpu_state.reg_a)
+    }
+}

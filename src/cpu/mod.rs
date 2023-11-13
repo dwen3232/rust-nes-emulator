@@ -10,4 +10,4 @@ pub use cpu_state::{
 pub use cpu_bus::CpuBus;
 pub use cpu_action::CpuAction;
 
-pub use self::instructions::{Instruction, InstructionMetaData, AddressingMode, Param};
+pub use self::instructions::{Instruction, InstructionMetaData, AddressingMode, Opcode, Param};

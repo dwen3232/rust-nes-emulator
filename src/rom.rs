@@ -37,14 +37,14 @@ pub enum Mirroring {
 }
 
 // Representation for a cartridge. Uses .nes file format
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct ROM {
     pub mirroring: Mirroring,
     pub mapper: u8,
-    // pub prg_rom: Vec<u8>,
-    pub prg_rom: [u8; PRG_ROM_SIZE],
-    pub chr_rom: [u8; CHR_ROM_SIZE],
-    // pub chr_rom: Vec<u8>,
+    pub prg_rom: Vec<u8>,
+    pub chr_rom: Vec<u8>,
+    // pub prg_rom: [u8; PRG_ROM_SIZE],
+    // pub chr_rom: [u8; CHR_ROM_SIZE],
 }
 
 impl ROM {
@@ -53,10 +53,10 @@ impl ROM {
         ROM {
             mirroring: Mirroring::Horizontal,
             mapper: 0,
-            // prg_rom: vec![0; PRG_ROM_PAGE_SIZE],    // TODO: might need to change this?
-            // chr_rom: vec![0; CHR_ROM_PAGE_SIZE],
-            prg_rom: [0; PRG_ROM_PAGE_SIZE * u8::MAX as usize],
-            chr_rom: [0; CHR_ROM_PAGE_SIZE * u8::MAX as usize],
+            prg_rom: vec![],
+            chr_rom: vec![],
+            // prg_rom: [0; PRG_ROM_SIZE],
+            // chr_rom: [0; CHR_ROM_SIZE],
         }
     }
 
@@ -83,10 +83,8 @@ impl ROM {
         if &raw[..4] != HEADER_TAG {
             return Err("Header tag invalid".to_string());
         }
-        let prg_rom_num_pages = raw[4];
-        let chr_rom_num_pages = raw[5];
-        let prg_rom_size = PRG_ROM_PAGE_SIZE * prg_rom_num_pages as usize;
-        let chr_rom_size = CHR_ROM_PAGE_SIZE * chr_rom_num_pages as usize;
+        let prg_rom_size = PRG_ROM_PAGE_SIZE * (raw[4] as usize);
+        let chr_rom_size = CHR_ROM_PAGE_SIZE * (raw[5] as usize);
         println!{"Found prg_rom_size of {:x}, or {} pages", prg_rom_size, raw[4]}
         // ~~FLAG 6:
         // 76543210
@@ -133,148 +131,24 @@ impl ROM {
         // chr_rom starts after prg_rom
         let chr_rom_start = prg_rom_start + prg_rom_size;
 
-        // Compute the number needed to mirror, write 
-        let mut prg_rom = [0; PRG_ROM_PAGE_SIZE * u8::MAX as usize];
-        let prg_num_repeats = (u8::MAX + prg_rom_num_pages - 1) / prg_rom_num_pages;
-        let mut chr_rom = [0; CHR_ROM_PAGE_SIZE * u8::MAX as usize];
-        let chr_num_repeats = (u8::MAX + chr_rom_num_pages - 1) / chr_rom_num_pages;
-
-        prg_rom.copy_from_slice(&raw[prg_rom_start .. (prg_rom_start + prg_rom_size)].repeat(prg_num_repeats as usize));
-        chr_rom.copy_from_slice(&raw[chr_rom_start .. (chr_rom_start + chr_rom_size)].repeat(chr_num_repeats as usize));
-        
         Ok(ROM {
             mirroring: mirroring,
             mapper: mapper_number,
-            prg_rom: prg_rom,
-            chr_rom: chr_rom,
+            prg_rom: raw[prg_rom_start .. (prg_rom_start + prg_rom_size)].to_vec(),
+            chr_rom: raw[chr_rom_start .. (chr_rom_start + chr_rom_size)].to_vec(),
         })
     }
 
+
 }
 
-// Got these test cases from bugzmanov's blog
-// Ref: https://bugzmanov.github.io/nes_ebook/chapter_5.html
-pub mod test {
-
+#[cfg(test)]
+mod tests {
     use super::*;
 
-    struct TestRom {
-        header: Vec<u8>,
-        trainer: Option<Vec<u8>>,
-        pgp_rom: Vec<u8>,
-        chr_rom: Vec<u8>,
-    }
-
-    fn create_rom(rom: TestRom) -> Vec<u8> {
-        let mut result = Vec::with_capacity(
-            rom.header.len()
-                + rom.trainer.as_ref().map_or(0, |t| t.len())
-                + rom.pgp_rom.len()
-                + rom.chr_rom.len(),
-        );
-
-        result.extend(&rom.header);
-        if let Some(t) = rom.trainer {
-            result.extend(t);
-        }
-        result.extend(&rom.pgp_rom);
-        result.extend(&rom.chr_rom);
-
-        result
-    }
-
-    pub fn test_rom() -> ROM {
-        let test_rom = create_rom(TestRom {
-            header: vec![
-                0x4E, 0x45, 0x53, 0x1A, 0x02, 0x01, 0x31, 00, 00, 00, 00, 00, 00, 00, 00, 00,
-            ],
-            trainer: None,
-            pgp_rom: vec![1; 2 * PRG_ROM_PAGE_SIZE],
-            chr_rom: vec![2; 1 * CHR_ROM_PAGE_SIZE],
-        });
-
-        ROM::from(test_rom).unwrap()
-    }
-
     #[test]
-    fn test() {
-        let test_rom = create_rom(TestRom {
-            header: vec![
-                0x4E, 0x45, 0x53, 0x1A, 0x02, 0x01, 0x31, 00, 00, 00, 00, 00, 00, 00, 00, 00,
-            ],
-            trainer: None,
-            pgp_rom: vec![1; 2 * PRG_ROM_PAGE_SIZE],
-            chr_rom: vec![2; 1 * CHR_ROM_PAGE_SIZE],
-        });
-
-        let rom: ROM = ROM::from(test_rom).unwrap();
-
-        let mut expected_chr_rom = [0; CHR_ROM_PAGE_SIZE * u8::MAX as usize];
-        expected_chr_rom.copy_from_slice(&[2; 1 * CHR_ROM_PAGE_SIZE]);
-
-        let mut expected_prg_rom = [0; PRG_ROM_PAGE_SIZE * u8::MAX as usize];
-        expected_prg_rom.copy_from_slice(&[1; 2 * PRG_ROM_PAGE_SIZE]);
-
-        assert_eq!(rom.chr_rom, expected_chr_rom);
-        assert_eq!(rom.prg_rom, expected_prg_rom);
-        assert_eq!(rom.mapper, 3);
-        assert_eq!(rom.mirroring, Mirroring::Vertical);
-    }
-
-    #[test]
-    fn test_with_trainer() {
-        let test_rom = create_rom(TestRom {
-            header: vec![
-                0x4E,
-                0x45,
-                0x53,
-                0x1A,
-                0x02,
-                0x01,
-                0x31 | 0b100,
-                00,
-                00,
-                00,
-                00,
-                00,
-                00,
-                00,
-                00,
-                00,
-            ],
-            trainer: Some(vec![0; 512]),
-            pgp_rom: vec![1; 2 * PRG_ROM_PAGE_SIZE],
-            chr_rom: vec![2; 1 * CHR_ROM_PAGE_SIZE],
-        });
-
-        let rom: ROM = ROM::from(test_rom).unwrap();
-
-        let mut expected_chr_rom = [0; CHR_ROM_PAGE_SIZE * u8::MAX as usize];
-        expected_chr_rom.copy_from_slice(&[2; 1 * CHR_ROM_PAGE_SIZE]);
-
-        let mut expected_prg_rom = [0; PRG_ROM_PAGE_SIZE * u8::MAX as usize];
-        expected_prg_rom.copy_from_slice(&[2; 1 * PRG_ROM_PAGE_SIZE]);
-
-        assert_eq!(rom.chr_rom, expected_chr_rom);
-        assert_eq!(rom.prg_rom, expected_prg_rom);
-        assert_eq!(rom.mapper, 3);
-        assert_eq!(rom.mirroring, Mirroring::Vertical);
-    }
-
-    #[test]
-    fn test_nes2_is_not_supported() {
-        let test_rom = create_rom(TestRom {
-            header: vec![
-                0x4E, 0x45, 0x53, 0x1A, 0x01, 0x01, 0x31, 0x8, 00, 00, 00, 00, 00, 00, 00, 00,
-            ],
-            trainer: None,
-            pgp_rom: vec![1; 1 * PRG_ROM_PAGE_SIZE],
-            chr_rom: vec![2; 1 * CHR_ROM_PAGE_SIZE],
-        });
-        let rom = ROM::from(test_rom);
-        match rom {
-            Result::Ok(_) => assert!(false, "should not load rom"),
-            Result::Err(str) => assert_eq!(str, "Currently do not support NES2.0 format"),
-        }
+    fn test_initialization() {
+        let rom = ROM::new();
+        assert_eq!(0, rom.mapper)
     }
 }

@@ -313,7 +313,7 @@ pub fn decode_opcode(opcode: u8) -> Result<(Opcode, AddressingMode, CpuCycleUnit
         0x94 => (Opcode::STY, AddressingMode::ZeroPageIndexX, 4),
         0x8C => (Opcode::STY, AddressingMode::Absolute, 4),
         _ => {
-            return Err(format!("Opcode not implemented {:2x}", opcode))
+            return Err(format!("Opcode not implemented {:02x}", opcode))
         }
     };
     Ok(result)
