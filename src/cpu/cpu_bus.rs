@@ -34,7 +34,6 @@ pub struct CpuBus<'a, 'b, 'c, 'd> {
 //     }
 // }
 
-// TODO: maybe add a method for peeking instead of reading? (read without side effects)
 impl<'a, 'b, 'c, 'd> CpuBus<'a, 'b, 'c, 'd> {
     pub fn new(
         cpu_state: &'a mut CpuState,

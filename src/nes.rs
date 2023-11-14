@@ -19,7 +19,6 @@ pub trait NES {
     fn next_ppu_frame(&mut self) -> Result<Option<()>, String>;
     
     // Loads a program
-    // TODO: this should directly require a ROM object
     fn set_rom(&mut self, rom: ROM) -> Result<(), String>;
 
     fn load_from_path(&mut self, path: &str) -> Result<(), String>;
@@ -67,7 +66,17 @@ impl ActionNES {
         CpuBus::new(&mut self.cpu_state, &mut self.ppu_state, &mut self.controller, &self.rom)
     }
 
-    fn log_trace(&mut self, instruction: &Instruction, original_cpu_state: &CpuState, original_ppu_state: &PpuState) -> Result<(), String> {
+    /* TODO: this is all spaghetti, need to change this. Maybe move program_trace out of ActionNES
+     * and write a wrapper that logs stuff. The logging logic should not be here!
+     */
+    fn log_trace(
+        log: &mut Vec<String>,
+        instruction: &Instruction, 
+        original_cpu_state: &mut CpuState, 
+        original_ppu_state: &mut PpuState,
+        original_controller: &mut Controller,
+        rom: &ROM
+    ) -> Result<(), String> {
         let Instruction { opcode, param, meta } = *instruction;
         let InstructionMetaData { cycles, mode, raw_opcode, length } = meta;
 
@@ -85,18 +94,19 @@ impl ActionNES {
         let arg = match length {
             1 => 0,
             2 => {
-                let address: u8 = self.as_cpu_bus().peek_byte(program_counter + 1);
+                let bus = CpuBus::new(original_cpu_state, original_ppu_state, original_controller, rom);
+                let address: u8 = bus.peek_byte(program_counter + 1);
                 hex_dump.push(address);
                 address as u16
             },
             3 => {
-                
-                let address_lo = self.as_cpu_bus().peek_byte(program_counter + 1);
-                let address_hi = self.as_cpu_bus().peek_byte(program_counter + 2);
+                let bus = CpuBus::new(original_cpu_state, original_ppu_state, original_controller, rom);
+                let address_lo = bus.peek_byte(program_counter + 1);
+                let address_hi = bus.peek_byte(program_counter + 2);
                 hex_dump.push(address_lo);
                 hex_dump.push(address_hi);
 
-                let address = self.as_cpu_bus().peek_two_bytes(program_counter + 1);
+                let address = bus.peek_two_bytes(program_counter + 1);
                 address
             },
             _ => {panic!()}
@@ -114,39 +124,44 @@ impl ActionNES {
                 format!("#${:02x}", value)
             },
             (_, AddressingMode::ZeroPage, Param::Address(address)) => {
-                let stored_value = self.as_cpu_bus().peek_byte(address);
+                let bus = CpuBus::new(original_cpu_state, original_ppu_state, original_controller, rom);
+                let stored_value = bus.peek_byte(address);
                 format!("${:02x} = {:02x}", address, stored_value)
             },
             (_, AddressingMode::ZeroPageIndexX, Param::Address(address)) => {
-                let stored_value = self.as_cpu_bus().peek_byte(address);
+                let bus = CpuBus::new(original_cpu_state, original_ppu_state, original_controller, rom);
+                let stored_value = bus.peek_byte(address);
                 format!(
                     "${:02x},X @ {:02x} = {:02x}",
                     arg, address, stored_value
                 )
             },
             (_, AddressingMode::ZeroPageIndexY, Param::Address(address)) => {
-                let stored_value = self.as_cpu_bus().peek_byte(address);
+                let bus = CpuBus::new(original_cpu_state, original_ppu_state, original_controller, rom);
+                let stored_value = bus.peek_byte(address);
                 format!(
                     "${:02x},Y @ {:02x} = {:02x}",
                     arg, address, stored_value
                 )
             },
             (_, AddressingMode::IndirectX, Param::Address(address)) => {
-                let stored_value = self.as_cpu_bus().peek_byte(address);
+                let bus = CpuBus::new(original_cpu_state, original_ppu_state, original_controller, rom);
+                let stored_value = bus.peek_byte(address);
                 format!(
                     "(${:02x},X) @ {:02x} = {:04x} = {:02x}",
                     arg,
-                    (arg.wrapping_add(self.cpu_state.reg_x as u16) as u8),
+                    (arg.wrapping_add(original_cpu_state.reg_x as u16) as u8),
                     address,
                     stored_value
                 )
             },
             (_, AddressingMode::IndirectY, Param::Address(address)) => {
-                let stored_value = self.as_cpu_bus().peek_byte(address);
+                let bus = CpuBus::new(original_cpu_state, original_ppu_state, original_controller, rom);
+                let stored_value = bus.peek_byte(address);
                 format!(
                     "(${:02x}),Y = {:04x} @ {:04x} = {:02x}",
                     arg,
-                    (address.wrapping_sub(self.cpu_state.reg_y as u16)),
+                    (address.wrapping_sub(original_cpu_state.reg_y as u16)),
                     address,
                     stored_value
                 )
@@ -164,18 +179,21 @@ impl ActionNES {
                 format!("${:04x}", address)
             },
             (_, AddressingMode::Absolute, Param::Address(address)) => {
-                let stored_value = self.as_cpu_bus().peek_byte(address);
+                let bus = CpuBus::new(original_cpu_state, original_ppu_state, original_controller, rom);
+                let stored_value = bus.peek_byte(address);
                 format!("${:04x} = {:02x}", address, stored_value)
             },
             (_, AddressingMode::AbsoluteIndexX, Param::Address(address)) => {
-                let stored_value = self.as_cpu_bus().peek_byte(address);
+                let bus = CpuBus::new(original_cpu_state, original_ppu_state, original_controller, rom);
+                let stored_value = bus.peek_byte(address);
                 format!(
                     "${:04x},X @ {:04x} = {:02x}",
                     arg, address, stored_value
                 )
             },
             (_, AddressingMode::AbsoluteIndexY, Param::Address(address)) => {
-                let stored_value = self.as_cpu_bus().peek_byte(address);
+                let bus = CpuBus::new(original_cpu_state, original_ppu_state, original_controller, rom);
+                let stored_value = bus.peek_byte(address);
                 format!(
                     "${:04x},Y @ {:04x} = {:02x}",
                     arg, address, stored_value
@@ -212,7 +230,7 @@ impl ActionNES {
         )
         .to_ascii_uppercase();
 
-        self.program_trace.push(trace);
+        log.push(trace);
         Ok(())
     }
 }
@@ -220,11 +238,12 @@ impl ActionNES {
 impl NES for ActionNES {
     // Updates state to after next CPU instruction
     fn next_cpu_instruction(&mut self) -> Result<Instruction, String> {
-        let original_cpu_state = self.cpu_state.clone();
-        let original_ppu_state = self.ppu_state.clone();
+        let mut original_cpu_state = self.cpu_state.clone();
+        let mut original_ppu_state = self.ppu_state.clone();
+        let mut original_controller = self.controller.clone();
         let instruction = self.as_cpu_action().next_cpu_instruction()?;
         // ! NOTE: we responsibility to stop program at BRK is up to caller
-        self.log_trace(&instruction, &original_cpu_state, &original_ppu_state)?;
+        Self::log_trace(&mut self.program_trace, &instruction, &mut original_cpu_state, &mut original_ppu_state, &mut original_controller, &self.rom)?;
         Ok(instruction)
     }
 
