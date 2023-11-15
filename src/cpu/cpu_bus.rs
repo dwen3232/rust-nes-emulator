@@ -1,4 +1,4 @@
-use crate::{rom::ROM, controller::Controller, ppu::PpuState};
+use crate::{rom::ROM, controller::Controller, ppu::{PpuState, PpuAction}};
 
 use super::{CpuState, CpuAction};
 
@@ -83,16 +83,17 @@ impl<'a, 'b, 'c, 'd> CpuBus<'a, 'b, 'c, 'd> {
             }
             PPU_REG_START ..= PPU_REG_END => {
                 let masked_index = index & PPU_MASK;
+                let mut ppu_action = PpuAction::new(&mut self.ppu_state, &self.rom);
                 match masked_index {
                     // TODO: update this to use PPUAction
-                    // 0 => self.ppu.write_ppuctrl(value),
-                    // 1 => self.ppu.write_ppumask(value),
-                    // 2 => panic!("PPUSTATUS is read-only"),
-                    // 3 => self.ppu.write_oamaddr(value),
-                    // 4 => self.ppu.write_oamdata(value),
-                    // 5 => self.ppu.write_ppuscroll(value),
-                    // 6 => self.ppu.write_ppuaddr(value),
-                    // 7 => self.ppu.write_ppudata(value),
+                    0 => ppu_action.write_ppuctrl(value),
+                    1 => ppu_action.write_ppumask(value),
+                    2 => panic!("PPUSTATUS is read-only"),
+                    3 => ppu_action.write_oamaddr(value),
+                    4 => ppu_action.write_oamdata(value),
+                    5 => ppu_action.write_ppuscroll(value),
+                    6 => ppu_action.write_ppuaddr(value),
+                    7 => ppu_action.write_ppudata(value),
                     _ => panic!("Invalid PPU_REG index")
                 }
             },
@@ -126,15 +127,16 @@ impl<'a, 'b, 'c, 'd> CpuBus<'a, 'b, 'c, 'd> {
             },
             PPU_REG_START ..= PPU_REG_END => {
                 let masked_index = index & PPU_MASK;
+                let mut ppu_action = PpuAction::new(&mut self.ppu_state, &self.rom);
                 match masked_index {
-                    // 0 => panic!("PPUCTRL is write-only"),
-                    // 1 => panic!("PPUMASK is write-only"),
-                    // 2 => self.ppu.read_ppustatus(),
-                    // 3 => panic!("OAMADDR is write-only"),
-                    // 4 => self.ppu.read_oamdata(),
-                    // 5 => panic!("PPUSCROLL is write-only"),
-                    // 6 => panic!("PPUADDR is write-only"),
-                    // 7 => self.ppu.read_ppudata(),
+                    0 => panic!("PPUCTRL is write-only"),
+                    1 => panic!("PPUMASK is write-only"),
+                    2 => ppu_action.read_ppustatus(),
+                    3 => panic!("OAMADDR is write-only"),
+                    4 => ppu_action.read_oamdata(),
+                    5 => panic!("PPUSCROLL is write-only"),
+                    6 => panic!("PPUADDR is write-only"),
+                    7 => ppu_action.read_ppudata(),
                     _ => panic!("Invalid PPU_REG index")
                 }
             },

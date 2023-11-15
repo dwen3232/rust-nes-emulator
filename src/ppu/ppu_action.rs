@@ -1,17 +1,19 @@
-use crate::rom::Mirroring;
+use crate::rom::{Mirroring, ROM};
 
-use super::{PpuState, ppu_state::PpuStatus};
+use super::{PpuState, ppu_state::PpuStatus, PpuBus};
 
-pub struct PpuAction<'a> {
-    ppu_state: &'a mut PpuState
+pub struct PpuAction<'a, 'b> {
+    ppu_state: &'a mut PpuState,
+    rom: &'b ROM,
 }
 
-impl<'a> PpuAction<'a> {
-    pub fn new(ppu_state: &'a mut PpuState) -> Self {
-        PpuAction { ppu_state }
+impl<'a, 'b> PpuAction<'a, 'b> {
+    pub fn new(ppu_state: &'a mut PpuState, rom: &'b ROM) -> Self {
+        PpuAction { ppu_state, rom }
     }
 
     // Blatant violation of SRP, but easiest way to do this atm
+    // Return true if on new frame
     pub fn update_ppu_and_check_for_new_frame(&mut self) -> bool {
         if self.ppu_state.cycle_counter < 341 {
             return false;
@@ -90,45 +92,29 @@ impl<'a> PpuAction<'a> {
         self.ppu_state.ppuaddr.write(data);
     }
 
-    // pub fn read_ppudata(&mut self) -> u8 {
-    //     let addr = self.ppu_state.ppuaddr.read();
-    //     // Retrieve previous value in buffer
-    //     let result = self.ppu_state.ppudata;
-    //     // Store in ppudata as buffer
-    //     self.ppu_state.ppudata = self.ppu_state.read_byte(addr);
-    //     // Increment address
-    //     let inc_value = self.ppu_state.ppuctrl.get_vram_addr_inc_value();
-    //     self.ppu_state.ppuaddr.increment(inc_value);
-    //     return result;
-    // }
+    pub fn read_ppudata(&mut self) -> u8 {
+        let addr = self.ppu_state.ppuaddr.read();
+        // Retrieve previous value in buffer
+        let result = self.ppu_state.ppudata;
+        // Store in ppudata as buffer
+        self.ppu_state.ppudata = self.as_ppu_bus().read_byte(addr);
+        // Increment address
+        let inc_value = self.ppu_state.ppuctrl.get_vram_addr_inc_value();
+        self.ppu_state.ppuaddr.increment(inc_value);
+        return result;
+    }
 
-    // pub fn write_ppudata(&mut self, data: u8) {
-    //     let addr = self.ppu_state.ppuaddr.read();
-    //     self.ppu_state.write_byte(addr, data);
-    //     // Increment address
-    //     let inc_value = self.ppu_state.ppuctrl.get_vram_addr_inc_value();
-    //     self.ppu_state.ppuaddr.increment(inc_value);
-    // }
+    pub fn write_ppudata(&mut self, data: u8) {
+        let addr = self.ppu_state.ppuaddr.read();
+        self.as_ppu_bus().write_byte(addr, data);
+        // Increment address
+        let inc_value = self.ppu_state.ppuctrl.get_vram_addr_inc_value();
+        self.ppu_state.ppuaddr.increment(inc_value);
+    }
 
-    // fn mirror_vram_addr(&self, addr: u16) -> u16 {
-    //     let vram_index = addr - 0x2000;
-    //     let nametable_index = vram_index / 0x400;
-
-    //     let mirror_nametable_index = match (&self.ppu_state.mirroring, nametable_index) {
-    //         (Mirroring::Horizontal, 0) => 0,
-    //         (Mirroring::Horizontal, 1) => 0,
-    //         (Mirroring::Horizontal, 2) => 1,
-    //         (Mirroring::Horizontal, 3) => 1,
-    //         (Mirroring::Vertical, 0) => 0,
-    //         (Mirroring::Vertical, 1) => 1,
-    //         (Mirroring::Vertical, 2) => 0,
-    //         (Mirroring::Vertical, 3) => 1,
-    //         _ => panic!("Unexpected mirroring, nametable_index pair")
-    //     };
-
-    //     let new_vram_index = (vram_index & 0b1111_0011_1111_1111) | (mirror_nametable_index << 10);
-    //     return new_vram_index
-    // }
+    fn as_ppu_bus(&mut self) -> PpuBus {
+        PpuBus::new(&mut self.ppu_state, &self.rom)
+    }
 
     fn is_sprite_zero_hit(&self) -> bool {
         let y = self.ppu_state.oam_data[0] as usize;

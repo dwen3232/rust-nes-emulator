@@ -7,8 +7,8 @@ use crate::rom::{Mirroring, ROM};
 #[derive(Debug, Clone, Copy)]
 pub struct PpuState {
     pub ram: [u8; 0x800],
-
     pub oam_data: [u8; 256],
+    pub palette_table: [u8; 32],
     
     // registers
     pub ppuctrl: PpuControl,
@@ -31,6 +31,7 @@ impl PpuState {
         PpuState {
             ram: [0; 0x800],
             oam_data: [0; 256],
+            palette_table: [0; 32],
             ppuctrl: PpuControl::from_bits_retain(0),
             ppumask: PpuMask::from_bits_retain(0),
             ppustatus: PpuStatus::from_bits_retain(0),
