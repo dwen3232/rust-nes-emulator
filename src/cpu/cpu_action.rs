@@ -56,7 +56,8 @@ impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
 
         // 5. Update cycles
         let cycles = base_cycles + self.compute_extra_cycles(&opcode, &mode);
-        self.increment_cycle_counter(cycles);
+        self.increment_cycle_counters(cycles);
+        
 
         let meta = InstructionMetaData { cycles, mode, raw_opcode, length };
         let instruction = Instruction { opcode, param, meta };
@@ -71,8 +72,9 @@ impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
         CpuBus::new(cpu_state, ppu_state, controller, rom)
     }
 
-    fn increment_cycle_counter(&mut self, cycles: u8) {
+    fn increment_cycle_counters(&mut self, cycles: u8) {
         self.cpu_state.cycle_counter += cycles as usize;
+        self.ppu_state.cycle_counter += 3 * cycles as usize;
     }
 
     fn push_to_stack(&mut self, value: u8) {

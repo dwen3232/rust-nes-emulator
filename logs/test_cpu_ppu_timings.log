@@ -5000,27 +5000,3 @@ C6B0  A9 FF     LDA #$FF                        A:FF X:97 Y:4E P:A5 SP:F9 PPU:12
 C6B2  48        PHA                             A:FF X:97 Y:4E P:A5 SP:F9 PPU:128, 53 CYC:14567
 C6B3  A9 AA     LDA #$AA                        A:FF X:97 Y:4E P:A5 SP:F8 PPU:128, 62 CYC:14570
 C6B5  D0 05     BNE $C6BC                       A:AA X:97 Y:4E P:A5 SP:F8 PPU:128, 68 CYC:14572
-C6BC  28        PLP                             A:AA X:97 Y:4E P:A5 SP:F8 PPU:128, 77 CYC:14575
-C6C0  A9 64     LDA #$64                        A:44 X:97 Y:4E P:6D SP:F9 PPU:128, 95 CYC:14581
-C6C2  A9 EA     LDA #$EA                        A:64 X:97 Y:4E P:6D SP:F9 PPU:128,101 CYC:14583
-C6C4  EA        NOP                             A:EA X:97 Y:4E P:ED SP:F9 PPU:128,107 CYC:14585
-C6C5  EA        NOP                             A:EA X:97 Y:4E P:ED SP:F9 PPU:128,113 CYC:14587
-C6C6  EA        NOP                             A:EA X:97 Y:4E P:ED SP:F9 PPU:128,119 CYC:14589
-C6C7  08        PHP                             A:EA X:97 Y:4E P:ED SP:F9 PPU:128,125 CYC:14591
-C6C8  48        PHA                             A:EA X:97 Y:4E P:ED SP:F8 PPU:128,134 CYC:14594
-C6CC  EA        NOP                             A:A9 X:97 Y:4E P:ED SP:F7 PPU:128,149 CYC:14599
-C6CD  EA        NOP                             A:A9 X:97 Y:4E P:ED SP:F7 PPU:128,155 CYC:14601
-C6CE  EA        NOP                             A:A9 X:97 Y:4E P:ED SP:F7 PPU:128,161 CYC:14603
-C6CF  EA        NOP                             A:A9 X:97 Y:4E P:ED SP:F7 PPU:128,167 CYC:14605
-C6D0  08        PHP                             A:A9 X:97 Y:4E P:ED SP:F7 PPU:128,173 CYC:14607
-C6D1  48        PHA                             A:A9 X:97 Y:4E P:ED SP:F6 PPU:128,182 CYC:14610
-C6D5  A9 54     LDA #$54                        A:34 X:97 Y:4E P:6D SP:F5 PPU:128,197 CYC:14615
-C6D7  A9 74     LDA #$74                        A:54 X:97 Y:4E P:6D SP:F5 PPU:128,203 CYC:14617
-C6D9  A9 D4     LDA #$D4                        A:74 X:97 Y:4E P:6D SP:F5 PPU:128,209 CYC:14619
-C6DB  A9 F4     LDA #$F4                        A:D4 X:97 Y:4E P:ED SP:F5 PPU:128,215 CYC:14621
-C6DD  A9 EA     LDA #$EA                        A:F4 X:97 Y:4E P:ED SP:F5 PPU:128,221 CYC:14623
-C6DF  EA        NOP                             A:EA X:97 Y:4E P:ED SP:F5 PPU:128,227 CYC:14625
-C6E0  EA        NOP                             A:EA X:97 Y:4E P:ED SP:F5 PPU:128,233 CYC:14627
-C6E1  EA        NOP                             A:EA X:97 Y:4E P:ED SP:F5 PPU:128,239 CYC:14629
-C6E2  08        PHP                             A:EA X:97 Y:4E P:ED SP:F5 PPU:128,245 CYC:14631
-C6E3  48        PHA                             A:EA X:97 Y:4E P:ED SP:F4 PPU:128,254 CYC:14634

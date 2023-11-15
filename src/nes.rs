@@ -3,10 +3,10 @@ use crate::cpu::{
     CpuAction, CpuState, Instruction, CpuBus, InstructionMetaData, AddressingMode, Param
 };
 // use crate::ppu::ppu_state::PpuState;
-use crate::ppu::PpuState;
+use crate::ppu::{PpuState, PpuAction};
 use crate::rom::ROM;
 
-type ProgramTrace = Vec<String>;
+
 
 
 pub trait NES {
@@ -33,15 +33,13 @@ pub trait NES {
     fn peek_ppu_state(&self) -> PpuState;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ActionNES {
     // TODO: change testing logic so that cpu_state doesn't have to be public!
     pub cpu_state: CpuState,
-    ppu_state: PpuState,
-    controller: Controller,
-    rom: ROM,
-    // TODO: make this not pub
-    pub program_trace: ProgramTrace
+    pub ppu_state: PpuState,
+    pub controller: Controller,
+    pub rom: ROM,
 }
 
 impl ActionNES {
@@ -52,7 +50,7 @@ impl ActionNES {
             ppu_state: PpuState::new(), 
             controller: Controller::new(), 
             rom: ROM::new(),
-            program_trace: vec![] }
+        }
     }
     // TODO: may want to revisit how this is done? Maybe implement From?
     fn as_cpu_action(&mut self) -> CpuAction {
@@ -66,184 +64,18 @@ impl ActionNES {
         CpuBus::new(&mut self.cpu_state, &mut self.ppu_state, &mut self.controller, &self.rom)
     }
 
-    /* TODO: this is all spaghetti, need to change this. Maybe move program_trace out of ActionNES
-     * and write a wrapper that logs stuff. The logging logic should not be here!
-     */
-    fn log_trace(
-        log: &mut Vec<String>,
-        instruction: &Instruction, 
-        original_cpu_state: &mut CpuState, 
-        original_ppu_state: &mut PpuState,
-        original_controller: &mut Controller,
-        rom: &ROM
-    ) -> Result<(), String> {
-        let Instruction { opcode, param, meta } = *instruction;
-        let InstructionMetaData { cycles, mode, raw_opcode, length } = meta;
-
-        let mut hex_dump = Vec::new();
-        // add opcode byte to dump
-        hex_dump.push(raw_opcode);
-
-        let CpuState { reg_a, reg_x, reg_y, status, program_counter, stack_pointer, cycle_counter, ..} = *original_cpu_state;
-        let cpu_cycle = cycle_counter;
-
-        let PpuState { cur_scanline, cycle_counter, .. } = *original_ppu_state;
-        let ppu_cycle = cycle_counter;
-
-        // get the parsed arg as a u16
-        let arg = match length {
-            1 => 0,
-            2 => {
-                let bus = CpuBus::new(original_cpu_state, original_ppu_state, original_controller, rom);
-                let address: u8 = bus.peek_byte(program_counter + 1);
-                hex_dump.push(address);
-                address as u16
-            },
-            3 => {
-                let bus = CpuBus::new(original_cpu_state, original_ppu_state, original_controller, rom);
-                let address_lo = bus.peek_byte(program_counter + 1);
-                let address_hi = bus.peek_byte(program_counter + 2);
-                hex_dump.push(address_lo);
-                hex_dump.push(address_hi);
-
-                let address = bus.peek_two_bytes(program_counter + 1);
-                address
-            },
-            _ => {panic!()}
-        };
-
-        // create temp string for operand details
-        let tmp = match (&instruction, mode, param) {
-            // length 1
-            (_, AddressingMode::Implicit, _) => String::from(""),
-            (_, AddressingMode::Accumulator, _) => {
-                format!("A")
-            },
-            // length 2
-            (_, AddressingMode::Immediate, Param::Value(value)) => {
-                format!("#${:02x}", value)
-            },
-            (_, AddressingMode::ZeroPage, Param::Address(address)) => {
-                let bus = CpuBus::new(original_cpu_state, original_ppu_state, original_controller, rom);
-                let stored_value = bus.peek_byte(address);
-                format!("${:02x} = {:02x}", address, stored_value)
-            },
-            (_, AddressingMode::ZeroPageIndexX, Param::Address(address)) => {
-                let bus = CpuBus::new(original_cpu_state, original_ppu_state, original_controller, rom);
-                let stored_value = bus.peek_byte(address);
-                format!(
-                    "${:02x},X @ {:02x} = {:02x}",
-                    arg, address, stored_value
-                )
-            },
-            (_, AddressingMode::ZeroPageIndexY, Param::Address(address)) => {
-                let bus = CpuBus::new(original_cpu_state, original_ppu_state, original_controller, rom);
-                let stored_value = bus.peek_byte(address);
-                format!(
-                    "${:02x},Y @ {:02x} = {:02x}",
-                    arg, address, stored_value
-                )
-            },
-            (_, AddressingMode::IndirectX, Param::Address(address)) => {
-                let bus = CpuBus::new(original_cpu_state, original_ppu_state, original_controller, rom);
-                let stored_value = bus.peek_byte(address);
-                format!(
-                    "(${:02x},X) @ {:02x} = {:04x} = {:02x}",
-                    arg,
-                    (arg.wrapping_add(original_cpu_state.reg_x as u16) as u8),
-                    address,
-                    stored_value
-                )
-            },
-            (_, AddressingMode::IndirectY, Param::Address(address)) => {
-                let bus = CpuBus::new(original_cpu_state, original_ppu_state, original_controller, rom);
-                let stored_value = bus.peek_byte(address);
-                format!(
-                    "(${:02x}),Y = {:04x} @ {:04x} = {:02x}",
-                    arg,
-                    (address.wrapping_sub(original_cpu_state.reg_y as u16)),
-                    address,
-                    stored_value
-                )
-            },
-            (_, AddressingMode::Relative, _) => {
-                let address: usize =
-                (program_counter as usize + 2).wrapping_add((arg as i8) as usize);
-                format!("${:04x}", address)
-            },
-            // length 3
-            (_, AddressingMode::IndirectJump, Param::Address(address)) => {
-                format!("(${:04x}) = {:04x}", arg, address)
-            },
-            (_, AddressingMode::AbsoluteJump, Param::Address(address)) => {
-                format!("${:04x}", address)
-            },
-            (_, AddressingMode::Absolute, Param::Address(address)) => {
-                let bus = CpuBus::new(original_cpu_state, original_ppu_state, original_controller, rom);
-                let stored_value = bus.peek_byte(address);
-                format!("${:04x} = {:02x}", address, stored_value)
-            },
-            (_, AddressingMode::AbsoluteIndexX, Param::Address(address)) => {
-                let bus = CpuBus::new(original_cpu_state, original_ppu_state, original_controller, rom);
-                let stored_value = bus.peek_byte(address);
-                format!(
-                    "${:04x},X @ {:04x} = {:02x}",
-                    arg, address, stored_value
-                )
-            },
-            (_, AddressingMode::AbsoluteIndexY, Param::Address(address)) => {
-                let bus = CpuBus::new(original_cpu_state, original_ppu_state, original_controller, rom);
-                let stored_value = bus.peek_byte(address);
-                format!(
-                    "${:04x},Y @ {:04x} = {:02x}",
-                    arg, address, stored_value
-                )
-            },
-            (instruction, mode, param) => {
-                panic!("Could not trace this argument {:?}, {:?}, {:?}", instruction, mode, param)
-            }    
-        };
-        // Get clock cycle information
-        
-
-
-        // Add strings together
-        let opstring = format!("{:?}", opcode);
-        let hex_str = hex_dump
-            .iter()
-            .map(|z| format!("{:02x}", z))
-            .collect::<Vec<String>>()
-            .join(" ");
-        let asm_str = format!("{:04x}  {:8} {: >4} {}", program_counter, hex_str, opstring, tmp)
-            .trim()
-            .to_string();
-        let clock_str = format!(" PPU:{:>3},{:>3} CYC:{}", cur_scanline, ppu_cycle, cpu_cycle);
-        // let clock_str = if is_trace_cycles {
-        //     format!(" PPU:{:>3},{:>3} CYC:{}", cur_scanline, ppu_cycle, cpu_cycle)
-        // } else {
-        //     format!("")
-        // };
-
-        let trace = format!(
-            "{:47} A:{:02x} X:{:02x} Y:{:02x} P:{:02x} SP:{:02x}{}",
-            asm_str, reg_a, reg_x, reg_y, status, stack_pointer, clock_str
-        )
-        .to_ascii_uppercase();
-
-        log.push(trace);
-        Ok(())
+    pub fn as_ppu_action(&mut self) -> PpuAction {
+        PpuAction::new(&mut self.ppu_state)
     }
+    
+        
 }
 
 impl NES for ActionNES {
     // Updates state to after next CPU instruction
     fn next_cpu_instruction(&mut self) -> Result<Instruction, String> {
-        let mut original_cpu_state = self.cpu_state.clone();
-        let mut original_ppu_state = self.ppu_state.clone();
-        let mut original_controller = self.controller.clone();
         let instruction = self.as_cpu_action().next_cpu_instruction()?;
-        // ! NOTE: we responsibility to stop program at BRK is up to caller
-        Self::log_trace(&mut self.program_trace, &instruction, &mut original_cpu_state, &mut original_ppu_state, &mut original_controller, &self.rom)?;
+        self.as_ppu_action().update_ppu_and_check_for_new_frame();
         Ok(instruction)
     }
 
