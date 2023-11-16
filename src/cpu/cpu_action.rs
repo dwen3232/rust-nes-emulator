@@ -210,7 +210,7 @@ impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
                 let orig_msb = (orig_addr >> 8) as u8;
                 let mem_addr = orig_addr.wrapping_add(self.cpu_state.reg_x as u16);
                 let msb = (mem_addr >> 8) as u8;
-                self.cpu_state.page_cross_flag = (orig_msb != msb);
+                self.cpu_state.page_cross_flag = orig_msb != msb;
                 Param::Address(mem_addr)
             },
             AddressingMode::AbsoluteIndexY => {
@@ -219,7 +219,7 @@ impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
                 let orig_msb = (orig_addr >> 8) as u8;
                 let mem_addr = orig_addr.wrapping_add(self.cpu_state.reg_y as u16);
                 let msb = (mem_addr >> 8) as u8;
-                self.cpu_state.page_cross_flag = (orig_msb != msb);
+                self.cpu_state.page_cross_flag = orig_msb != msb;
                 Param::Address(mem_addr)
             },
             AddressingMode::IndirectX => {
@@ -238,8 +238,8 @@ impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
                 let orig_msb = (orig_addr >> 8) as u8;
                 let mem_addr = orig_addr.wrapping_add(self.cpu_state.reg_y as u16);
                 let msb = (mem_addr >> 8) as u8;
-                self.cpu_state.page_cross_flag = (orig_msb != msb);
-                (Param::Address(mem_addr))
+                self.cpu_state.page_cross_flag = orig_msb != msb;
+                Param::Address(mem_addr)
             },
         }
     }

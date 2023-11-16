@@ -1,4 +1,4 @@
-use crate::rom::{Mirroring, ROM};
+use crate::rom::{ROM};
 
 use super::{PpuState, ppu_state::PpuStatus, PpuBus};
 

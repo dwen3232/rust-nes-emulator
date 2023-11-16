@@ -32,7 +32,7 @@ impl TraceNes {
     }
 
     pub fn next_cpu_instruction(&mut self) -> Result<Instruction, String> {
-        let mut prev_nes = self.nes.clone();
+        let prev_nes = self.nes.clone();
         let instruction = self.nes.next_cpu_instruction()?;
         Self::log_trace(&mut self.program_trace, &instruction, prev_nes)?;
         Ok(instruction)
@@ -53,7 +53,7 @@ impl TraceNes {
             rom,
         } = nes;
         let Instruction { opcode, param, meta } = *instruction;
-        let InstructionMetaData { cycles, mode, raw_opcode, length } = meta;
+        let InstructionMetaData { cycles: _, mode, raw_opcode, length } = meta;
 
         let mut hex_dump = Vec::new();
         // add opcode byte to dump

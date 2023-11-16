@@ -1,19 +1,19 @@
 use std::collections::HashMap;
-use std::fmt::Display;
-use std::fs::OpenOptions;
-use std::fs::remove_file;
-use std::io::Write;
+
+
+
+
 
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
-use sdl2::pixels::Color;
+
 use sdl2::pixels::PixelFormatEnum;
-use sdl2::EventPump;
+
 
 use crate::nes::ActionNES;
 use crate::nes::NES;
-use crate::rom::ROM;
-use crate::controller::Controller;
+
+
 use crate::controller::ControllerState;
 
 use self::frame::Frame;

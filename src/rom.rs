@@ -11,7 +11,7 @@
 // $8000–$FFFF = Usual ROM, commonly with Mapper Registers (see MMC1 and UxROM for example)
 // UxROM Ref: https://www.nesdev.org/wiki/UxROM
 
-use std::fs::{self, File, read};
+use std::fs::{read};
 
 const HEADER_TAG: [u8; 4] = [0x4E, 0x45, 0x53, 0x1A];
 const PRG_ROM_PAGE_SIZE: usize = 16384; // 16 KB page size
@@ -104,7 +104,7 @@ impl ROM {
         // Right now, only checking for mirror, four screen flags
         let flag_6_byte = raw[6];
         let mirror = flag_6_byte & MIRROR_MASK != 0;
-        // let cartridge = flag_6_byte & CARTRIDGE_MASK != 0;
+        let cartridge = flag_6_byte & CARTRIDGE_MASK != 0;
         let trainer = flag_6_byte & TRAINER_MASK != 0;
         let four_screen = flag_6_byte & FOUR_SCREEN_MASK != 0;
         let mapper_number_lsb = (flag_6_byte >> 4) & 0b0000_1111;

@@ -1,6 +1,6 @@
 use bitflags::bitflags;
 
-use crate::rom::{Mirroring, ROM};
+
 
 
 
@@ -359,7 +359,7 @@ impl PpuAddr {
 type PpuData = u8;
 
 mod tests {
-    use super::*;
+    
 
     #[test]
     fn test_initialization() {

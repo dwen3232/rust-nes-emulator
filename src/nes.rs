@@ -1,6 +1,6 @@
 use crate::controller::{ControllerState, Controller};
 use crate::cpu::{
-    CpuAction, CpuState, Instruction, CpuBus, InstructionMetaData, AddressingMode, Param
+    CpuAction, CpuState, Instruction, CpuBus
 };
 // use crate::ppu::ppu_state::PpuState;
 use crate::ppu::{PpuState, PpuAction};
@@ -79,9 +79,9 @@ impl NES for ActionNES {
         // TODO: need to run CPU instructions until we're at the next frame
         // Some Rust while loop black magic
         // let mut count = 1;
-        let instruction = self.as_cpu_action().next_cpu_instruction()?;
+        let _instruction = self.as_cpu_action().next_cpu_instruction()?;
         while !self.as_ppu_action().update_ppu_and_check_for_new_frame() {
-            let instruction = self.as_cpu_action().next_cpu_instruction()?;
+            let _instruction = self.as_cpu_action().next_cpu_instruction()?;
             // count += 1;
         }
         // println!("Executed {} instructions", count);

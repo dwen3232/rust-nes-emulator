@@ -1,6 +1,6 @@
 use crate::{rom::ROM, controller::Controller, ppu::{PpuState, PpuAction}};
 
-use super::{CpuState, CpuAction};
+use super::{CpuState};
 
 const RAM_START: u16 =      0x0000;
 const RAM_END: u16 =        0x1FFF;
@@ -110,7 +110,7 @@ impl<'a, 'b, 'c, 'd> CpuBus<'a, 'b, 'c, 'd> {
                 self.controller.write(value);
             }
             APUIO_START ..= APUIO_END => {
-                let mut index = index - APUIO_START;
+                let index = index - APUIO_START;
                 self.apuio_reg[index as usize] = value;
             },
             CART_START ..= CART_END => {
@@ -144,7 +144,7 @@ impl<'a, 'b, 'c, 'd> CpuBus<'a, 'b, 'c, 'd> {
                 self.controller.read()
             },
             APUIO_START ..= APUIO_END => {
-                let mut index = index - APUIO_START;
+                let index = index - APUIO_START;
                 self.apuio_reg[index as usize]
             },
             PRG_ROM_START ..= PRG_ROM_END => {
@@ -166,14 +166,14 @@ impl<'a, 'b, 'c, 'd> CpuBus<'a, 'b, 'c, 'd> {
                 self.cpu_state.ram[(index & RAM_MASK) as usize]
             },
             PPU_REG_START ..= PPU_REG_END => {
-                let masked_index = index & PPU_MASK;
+                let _masked_index = index & PPU_MASK;
                 panic!("Invalid PPU_REG index")
             },
             0x4016 => {
                 self.controller.peek()
             },
             APUIO_START ..= APUIO_END => {
-                let mut index = index - APUIO_START;
+                let index = index - APUIO_START;
                 self.apuio_reg[index as usize]
             },
             PRG_ROM_START ..= PRG_ROM_END => {
