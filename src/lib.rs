@@ -6,3 +6,4 @@ pub mod ppu;
 pub mod rom;
 pub mod controller;
 pub mod screen;
+pub mod tracer;

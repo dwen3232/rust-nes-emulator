@@ -22,6 +22,8 @@ pub mod frame;
 pub mod palette;
 pub mod tile_viewer;
 
+
+// Make this function runnable with an NES object as an input
 pub fn run(path: &str) {
     // Initialize sdl display
     let sdl_context = sdl2::init().unwrap();
@@ -54,18 +56,17 @@ pub fn run(path: &str) {
     let mut frame = Frame::new();
     let mut nes = ActionNES::new();
     nes.load_from_path(path);
+    nes.reset();
 
     loop {
         // 1. Execute until next frame
         nes.next_ppu_frame();
-        println!("executing");
 
         // 2. Update the display
         frame.render(&nes.ppu_state, &nes.rom);
         texture.update(None, frame.as_bytes_ref(), 256 * 3);
         canvas.copy(&texture, None, None);
         canvas.present();
-        println!("Updating display");
 
         // 3. Read user input 
         for event in event_pump.poll_iter() {

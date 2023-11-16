@@ -7,8 +7,6 @@ use crate::ppu::{PpuState, PpuAction};
 use crate::rom::ROM;
 
 
-
-
 pub trait NES {
     // pub fn next_cpu_cycle();
     
@@ -87,11 +85,12 @@ impl NES for ActionNES {
         // Some Rust while loop black magic
         let mut count = 1;
         let instruction = self.as_cpu_action().next_cpu_instruction()?;
-        while self.as_ppu_action().update_ppu_and_check_for_new_frame() {
+        while !self.as_ppu_action().update_ppu_and_check_for_new_frame() {
             let instruction = self.as_cpu_action().next_cpu_instruction()?;
             count += 1;
         }
-        println!("Executed {} instructions", count);
+        // println!("Executed {} instructions", count);
+        // println!("PPU State: {} {}", self.ppu_state.cycle_counter, self.ppu_state.cur_scanline);
         Ok(())
     }
 
@@ -111,7 +110,11 @@ impl NES for ActionNES {
 
     // Resets the console
     fn reset(&mut self) -> Result<(), String> {
-        todo!()
+        self.cpu_state.reset();
+        self.cpu_state.program_counter = self.as_cpu_bus().read_two_bytes(0xFFFC);
+        self.cpu_state.cycle_counter += 7;
+        self.ppu_state.cycle_counter += 21;
+        Ok(())
     }
 
     // Look into CPU state
