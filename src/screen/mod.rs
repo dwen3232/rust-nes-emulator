@@ -23,6 +23,7 @@ pub mod palette;
 
 
 // Make this function runnable with an NES object as an input
+#[allow(unused)]
 pub fn run(path: &str) {
     // Initialize sdl display
     let sdl_context = sdl2::init().unwrap();

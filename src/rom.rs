@@ -104,7 +104,7 @@ impl ROM {
         // Right now, only checking for mirror, four screen flags
         let flag_6_byte = raw[6];
         let mirror = flag_6_byte & MIRROR_MASK != 0;
-        let cartridge = flag_6_byte & CARTRIDGE_MASK != 0;
+        let _cartridge = flag_6_byte & CARTRIDGE_MASK != 0;
         let trainer = flag_6_byte & TRAINER_MASK != 0;
         let four_screen = flag_6_byte & FOUR_SCREEN_MASK != 0;
         let mapper_number_lsb = (flag_6_byte >> 4) & 0b0000_1111;
