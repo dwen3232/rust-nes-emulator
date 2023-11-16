@@ -331,7 +331,7 @@ impl PpuAddr {
     pub fn read(&self) -> u16 { 
         let msb = self.data.1 as u16;
         let lsb = self.data.0 as u16;
-        return (msb << 8) + lsb;
+        (msb << 8) + lsb
     }
 
     pub fn increment(&mut self, inc: u8) {

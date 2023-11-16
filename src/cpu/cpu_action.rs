@@ -111,7 +111,7 @@ impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
         // TODO: I think how interrupts are handled needs to be revisited eventually
         let lsb = self.cpu_state.program_counter as u8;
         let msb = (self.cpu_state.program_counter >> 8) as u8;
-        let mut status = self.cpu_state.status.clone();
+        let mut status = self.cpu_state.status;
         // Push BRK flag depending on interrupt type
         status.set(CpuStatus::BRK, interrupt.is_set_b_flag);
 
@@ -524,7 +524,7 @@ impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
 
     fn and(&mut self, parameter: u8) {
         // Affects Flags: N Z
-        self.cpu_state.reg_a = self.cpu_state.reg_a & parameter;
+        self.cpu_state.reg_a &= parameter;
 
         self.set_negative_flag(self.cpu_state.reg_a);
         self.set_zero_flag(self.cpu_state.reg_a);
@@ -718,7 +718,7 @@ impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
 
     fn eor(&mut self, parameter: u8) {
         // Affects Flags: N Z
-        self.cpu_state.reg_a = self.cpu_state.reg_a ^ parameter;
+        self.cpu_state.reg_a ^= parameter;
 
         self.set_negative_flag(self.cpu_state.reg_a);
         self.set_zero_flag(self.cpu_state.reg_a);
@@ -844,7 +844,7 @@ impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
 
     fn ora(&mut self, parameter: u8) {
         // Affects Flags: N Z
-        self.cpu_state.reg_a = self.cpu_state.reg_a | parameter;
+        self.cpu_state.reg_a |= parameter;
 
         self.set_negative_flag(self.cpu_state.reg_a);
         self.set_zero_flag(self.cpu_state.reg_a);
@@ -1030,7 +1030,7 @@ impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
         // Affects Flags: None
         // Need to push 'status' with BRK set
         // https://www.nesdev.org/wiki/Status_flags#The_B_flag
-        let status = self.cpu_state.status.clone() | CpuStatus::BRK;
+        let status = self.cpu_state.status | CpuStatus::BRK;
         self.push_to_stack(status.bits());
     }
 

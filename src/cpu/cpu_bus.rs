@@ -63,16 +63,16 @@ impl<'a, 'b, 'c, 'd> CpuBus<'a, 'b, 'c, 'd> {
     pub fn read_two_bytes(&mut self, index: u16) -> u16 {
         let lsb = self.read_byte(index) as u16;
         let msb = self.read_byte(index + 1) as u16;
-        let two_bytes = (msb << 8) + lsb;
-        two_bytes
+        
+        (msb << 8) + lsb
     }
 
     /// Reads two bytes from a location, looping back to the start of the page if on a boundary
     pub fn read_two_page_bytes(&mut self, index: u16) -> u16 {
         let lsb = self.read_byte(index) as u16;
         let msb = self.read_byte((index as u8).wrapping_add(1) as u16) as u16;
-        let two_bytes = (msb << 8) + lsb;
-        two_bytes
+        
+        (msb << 8) + lsb
     }
 
     /// Writes a byte to a location
@@ -83,7 +83,7 @@ impl<'a, 'b, 'c, 'd> CpuBus<'a, 'b, 'c, 'd> {
             }
             PPU_REG_START ..= PPU_REG_END => {
                 let masked_index = index & PPU_MASK;
-                let mut ppu_action = PpuAction::new(&mut self.ppu_state, &self.rom);
+                let mut ppu_action = PpuAction::new(self.ppu_state, self.rom);
                 match masked_index {
                     // TODO: update this to use PPUAction
                     0 => ppu_action.write_ppuctrl(value),
@@ -103,7 +103,7 @@ impl<'a, 'b, 'c, 'd> CpuBus<'a, 'b, 'c, 'd> {
                 for i in 0..256u16 {
                     buffer[i as usize] = self.read_byte(hi + i);
                 }
-                let mut ppu_action = PpuAction::new(&mut self.ppu_state, &self.rom);
+                let mut ppu_action = PpuAction::new(self.ppu_state, self.rom);
                 ppu_action.write_oamdma(&buffer);
             }
             0x4016 => {
@@ -127,7 +127,7 @@ impl<'a, 'b, 'c, 'd> CpuBus<'a, 'b, 'c, 'd> {
             },
             PPU_REG_START ..= PPU_REG_END => {
                 let masked_index = index & PPU_MASK;
-                let mut ppu_action = PpuAction::new(&mut self.ppu_state, &self.rom);
+                let mut ppu_action = PpuAction::new(self.ppu_state, self.rom);
                 match masked_index {
                     0 => panic!("PPUCTRL is write-only"),
                     1 => panic!("PPUMASK is write-only"),
@@ -151,7 +151,7 @@ impl<'a, 'b, 'c, 'd> CpuBus<'a, 'b, 'c, 'd> {
                 let mut index = index - PRG_ROM_START;
                 if self.rom.prg_rom.len() == 0x4000 && index >= 0x4000 {
                     //mirror if needed
-                    index = index % 0x4000;
+                    index %= 0x4000;
                 }
                 self.rom.prg_rom[index as usize]
             },
@@ -167,17 +167,7 @@ impl<'a, 'b, 'c, 'd> CpuBus<'a, 'b, 'c, 'd> {
             },
             PPU_REG_START ..= PPU_REG_END => {
                 let masked_index = index & PPU_MASK;
-                match masked_index {
-                    // 0 => panic!("PPUCTRL is write-only"),
-                    // 1 => panic!("PPUMASK is write-only"),
-                    // 2 => self.ppu.read_ppustatus(),
-                    // 3 => panic!("OAMADDR is write-only"),
-                    // 4 => self.ppu.read_oamdata(),
-                    // 5 => panic!("PPUSCROLL is write-only"),
-                    // 6 => panic!("PPUADDR is write-only"),
-                    // 7 => self.ppu.read_ppudata(),
-                    _ => panic!("Invalid PPU_REG index")
-                }
+                panic!("Invalid PPU_REG index")
             },
             0x4016 => {
                 self.controller.peek()
@@ -190,7 +180,7 @@ impl<'a, 'b, 'c, 'd> CpuBus<'a, 'b, 'c, 'd> {
                 let mut index = index - PRG_ROM_START;
                 if self.rom.prg_rom.len() == 0x4000 && index >= 0x4000 {
                     //mirror if needed
-                    index = index % 0x4000;
+                    index %= 0x4000;
                 }
                 self.rom.prg_rom[index as usize]
             },
@@ -201,7 +191,7 @@ impl<'a, 'b, 'c, 'd> CpuBus<'a, 'b, 'c, 'd> {
     pub fn peek_two_bytes(&self, index: u16) -> u16 {
         let lsb = self.peek_byte(index) as u16;
         let msb = self.peek_byte(index + 1) as u16;
-        let two_bytes = (msb << 8) + lsb;
-        two_bytes
+        
+        (msb << 8) + lsb
     }
 }

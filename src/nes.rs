@@ -33,7 +33,7 @@ pub trait NES {
     fn peek_ppu_state(&self) -> PpuState;
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct ActionNES {
     // TODO: change testing logic so that cpu_state doesn't have to be public!
     pub cpu_state: CpuState,
@@ -44,13 +44,9 @@ pub struct ActionNES {
 
 impl ActionNES {
     pub fn new() -> Self {
-        ActionNES { 
-            cpu_state: CpuState::new(), 
-            ppu_state: PpuState::new(), 
-            controller: Controller::new(), 
-            rom: ROM::new(),
-        }
+        Self::default()
     }
+
     // TODO: may want to revisit how this is done? Maybe implement From?
     fn as_cpu_action(&mut self) -> CpuAction {
         CpuAction::new(&mut self.cpu_state, &mut self.ppu_state, &mut self.controller, &self.rom)

@@ -11,6 +11,7 @@ use crate::{
 type ProgramTrace = Vec<String>;
 
 // TODO: Make this implement NES
+#[derive(Default)]
 pub struct TraceNes {
     nes: ActionNES,
     pub program_trace: ProgramTrace,
@@ -18,10 +19,7 @@ pub struct TraceNes {
 
 impl TraceNes {
     pub fn new() -> Self {
-        TraceNes {
-            nes: ActionNES::new(),
-            program_trace: vec![]
-        }
+        Self::default()
     }
 
     /// NOTE: this is only used for testing, because the nestest has a unique set up, not sure why

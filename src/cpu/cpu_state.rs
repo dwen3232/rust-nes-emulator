@@ -30,7 +30,7 @@ pub struct CpuState {
     pub cycle_counter: usize,
 }
 
-impl Default for ActionNES {
+impl Default for CpuState {
     fn default() -> Self {
         Self::new()
     }

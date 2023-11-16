@@ -13,7 +13,7 @@ impl<'a, 'b> PpuAction<'a, 'b> {
     }
 
     fn as_ppu_bus(&mut self) -> PpuBus {
-        PpuBus::new(&mut self.ppu_state, self.rom)
+        PpuBus::new(self.ppu_state, self.rom)
     }
 
     // Blatant violation of SRP, but easiest way to do this atm

@@ -15,6 +15,12 @@ pub struct Frame {
     pub data: [(u8, u8, u8); WIDTH * HEIGHT]
 }
 
+impl Default for Frame {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Frame {
     pub fn new() -> Self {
         Frame { data: [(0, 0, 0); WIDTH * HEIGHT] }
