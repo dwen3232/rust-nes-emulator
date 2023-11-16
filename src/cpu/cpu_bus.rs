@@ -103,8 +103,8 @@ impl<'a, 'b, 'c, 'd> CpuBus<'a, 'b, 'c, 'd> {
                 for i in 0..256u16 {
                     buffer[i as usize] = self.read_byte(hi + i);
                 }
-
-                // self.ppu.write_oamdma(&buffer);
+                let mut ppu_action = PpuAction::new(&mut self.ppu_state, &self.rom);
+                ppu_action.write_oamdma(&buffer);
             }
             0x4016 => {
                 self.controller.write(value);

@@ -24,15 +24,6 @@ impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
         CpuAction { cpu_state, ppu_state, controller, rom }
     }
 
-    pub fn reset(cpu_state: &mut CpuState) {
-        cpu_state.reset();
-        // TODO: reset program_counter
-        // self.cpu_state.program_counter = self.read_two_bytes(0xFFFC); // TEST: trying out subtracting one
-        // // self.cpu_state.program_counter = self.read_two_bytes(0xFFFC); // TEST: trying out subtracting one
-        // self.increment_cycle_counter(7);
-        todo!()
-    }
-
     pub fn next_cpu_instruction(&mut self) -> Result<Instruction, String> {
         // ! TODO: eventually, I want this to follow a pipelining pattern (fetch, decode, execute, mem, wb) or something similar
         // 1. Check for interrupt

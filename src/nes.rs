@@ -83,11 +83,11 @@ impl NES for ActionNES {
     fn next_ppu_frame(&mut self) -> Result<(), String>{
         // TODO: need to run CPU instructions until we're at the next frame
         // Some Rust while loop black magic
-        let mut count = 1;
+        // let mut count = 1;
         let instruction = self.as_cpu_action().next_cpu_instruction()?;
         while !self.as_ppu_action().update_ppu_and_check_for_new_frame() {
             let instruction = self.as_cpu_action().next_cpu_instruction()?;
-            count += 1;
+            // count += 1;
         }
         // println!("Executed {} instructions", count);
         // println!("PPU State: {} {}", self.ppu_state.cycle_counter, self.ppu_state.cur_scanline);
@@ -109,6 +109,7 @@ impl NES for ActionNES {
     }
 
     // Resets the console
+    // TODO: this should trigger some interrupt right?
     fn reset(&mut self) -> Result<(), String> {
         self.cpu_state.reset();
         self.cpu_state.program_counter = self.as_cpu_bus().read_two_bytes(0xFFFC);

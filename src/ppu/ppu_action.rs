@@ -12,6 +12,10 @@ impl<'a, 'b> PpuAction<'a, 'b> {
         PpuAction { ppu_state, rom }
     }
 
+    fn as_ppu_bus(&mut self) -> PpuBus {
+        PpuBus::new(&mut self.ppu_state, &self.rom)
+    }
+
     // Blatant violation of SRP, but easiest way to do this atm
     // Return true if on new frame
     pub fn update_ppu_and_check_for_new_frame(&mut self) -> bool {
@@ -110,10 +114,6 @@ impl<'a, 'b> PpuAction<'a, 'b> {
         // Increment address
         let inc_value = self.ppu_state.ppuctrl.get_vram_addr_inc_value();
         self.ppu_state.ppuaddr.increment(inc_value);
-    }
-
-    fn as_ppu_bus(&mut self) -> PpuBus {
-        PpuBus::new(&mut self.ppu_state, &self.rom)
     }
 
     fn is_sprite_zero_hit(&self) -> bool {

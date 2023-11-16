@@ -9,6 +9,8 @@ use crate::{
 };
 
 type ProgramTrace = Vec<String>;
+
+// TODO: Make this implement NES
 pub struct TraceNes {
     nes: ActionNES,
     pub program_trace: ProgramTrace,

@@ -101,7 +101,6 @@ impl Frame {
                             (false, true) => palette::SYSTEM_PALLETE[palette[1] as usize],
                             (true, false) => palette::SYSTEM_PALLETE[palette[2] as usize],
                             (true, true) => palette::SYSTEM_PALLETE[palette[3] as usize],
-                            _ => panic!("impossible"),
                         };
                         match (flip_horizontal, flip_vertical) {
                             (false, false) => self.set_pixel(tile_x + x, tile_y + y, rgb),

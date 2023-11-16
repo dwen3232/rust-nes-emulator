@@ -35,7 +35,8 @@ impl<'a, 'b> PpuBus<'a, 'b> {
 
     pub fn write_byte(&mut self, index: u16, value: u8) {
         match index {
-            0x0000..=0x1FFF => panic!("CHR_ROM is read only"),
+            0x0000..=0x1FFF => println!("CHR_ROM is read only"),
+            // 0x0000..=0x1FFF => panic!("CHR_ROM is read only"),
             0x2000..=0x2FFF => {
                 let vram_index = self.mirror_vram_addr(index);
                 self.ppu_state.ram[vram_index as usize] = value;

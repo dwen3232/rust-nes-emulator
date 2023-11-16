@@ -20,7 +20,6 @@ use self::frame::Frame;
 
 pub mod frame;
 pub mod palette;
-pub mod tile_viewer;
 
 
 // Make this function runnable with an NES object as an input
