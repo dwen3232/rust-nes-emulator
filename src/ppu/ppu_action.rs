@@ -13,7 +13,7 @@ impl<'a, 'b> PpuAction<'a, 'b> {
     }
 
     fn as_ppu_bus(&mut self) -> PpuBus {
-        PpuBus::new(&mut self.ppu_state, &self.rom)
+        PpuBus::new(&mut self.ppu_state, self.rom)
     }
 
     // Blatant violation of SRP, but easiest way to do this atm
@@ -26,7 +26,7 @@ impl<'a, 'b> PpuAction<'a, 'b> {
             // sprite zero hit flag is reset on vblank
             self.ppu_state.ppustatus.set_sprite_zero_hit(true);
         }
-        self.ppu_state.cycle_counter = self.ppu_state.cycle_counter - 341;
+        self.ppu_state.cycle_counter -= 341;
         self.ppu_state.cur_scanline += 1;
 
         if self.ppu_state.cur_scanline == 241 {
@@ -42,7 +42,7 @@ impl<'a, 'b> PpuAction<'a, 'b> {
             self.ppu_state.ppustatus.set_sprite_zero_hit(false);
             return true;
         }
-        return false;
+        false
     }
 
     pub fn write_ppuctrl(&mut self, data: u8) {
@@ -105,7 +105,7 @@ impl<'a, 'b> PpuAction<'a, 'b> {
         // Increment address
         let inc_value = self.ppu_state.ppuctrl.get_vram_addr_inc_value();
         self.ppu_state.ppuaddr.increment(inc_value);
-        return result;
+        result
     }
 
     pub fn write_ppudata(&mut self, data: u8) {

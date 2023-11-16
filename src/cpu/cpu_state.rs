@@ -1,5 +1,7 @@
 use bitflags::bitflags;
 
+use crate::nes::ActionNES;
+
 
 const STACK_POINTER_INIT: u8 = 0xFD;
 const PROGRAM_COUNTER_INIT: u16 = 0x600;
@@ -26,6 +28,12 @@ pub struct CpuState {
     pub irq_interrupt_poll: Option<()>,
 
     pub cycle_counter: usize,
+}
+
+impl Default for ActionNES {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl CpuState {

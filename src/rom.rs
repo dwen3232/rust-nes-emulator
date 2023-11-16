@@ -47,6 +47,12 @@ pub struct ROM {
     // pub chr_rom: [u8; CHR_ROM_SIZE],
 }
 
+impl Default for ROM {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ROM {
     pub fn new() -> Self {
         // Creates ROM with no data, useful for testing other components
@@ -80,7 +86,7 @@ impl ROM {
         // 11-15	Unused padding (should be filled with zero, but some rippers put their name across bytes 7-15)
         // TODO: only handling flag 6 and 7, since 8, 9, 10 are rarely used, may need to implement in future
 
-        if &raw[..4] != HEADER_TAG {
+        if raw[..4] != HEADER_TAG {
             return Err("Header tag invalid".to_string());
         }
         let prg_rom_size = PRG_ROM_PAGE_SIZE * (raw[4] as usize);
@@ -125,15 +131,15 @@ impl ROM {
             (_, true) => Mirroring::Vertical,
             (_, _)    => Mirroring::Horizontal,
         };
-        let mapper_number = mapper_number_msb + mapper_number_lsb;
+        let mapper = mapper_number_msb + mapper_number_lsb;
         // If there is a trainer, then the trainer block is 512, otherwise 0
         let prg_rom_start = 16 + if trainer{ 512 } else {0};
         // chr_rom starts after prg_rom
         let chr_rom_start = prg_rom_start + prg_rom_size;
 
         Ok(ROM {
-            mirroring: mirroring,
-            mapper: mapper_number,
+            mirroring,
+            mapper,
             prg_rom: raw[prg_rom_start .. (prg_rom_start + prg_rom_size)].to_vec(),
             chr_rom: raw[chr_rom_start .. (chr_rom_start + chr_rom_size)].to_vec(),
         })

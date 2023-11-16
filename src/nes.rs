@@ -44,7 +44,6 @@ pub struct ActionNES {
 
 impl ActionNES {
     pub fn new() -> Self {
-        println!("test");
         ActionNES { 
             cpu_state: CpuState::new(), 
             ppu_state: PpuState::new(), 

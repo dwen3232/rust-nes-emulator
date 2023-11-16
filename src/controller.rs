@@ -24,6 +24,12 @@ pub struct Controller {
     pub controller_state: ControllerState,
 }
 
+impl Default for Controller {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Controller {
     pub fn new() -> Self {
         Controller {
@@ -44,7 +50,7 @@ impl Controller {
         let cur_flag = ControllerState::from_bits_retain(self.cur_flag);
         let value = if self.controller_state.contains(cur_flag) { 1 } else { 0 };
         if !self.strobe {
-            self.cur_flag = self.cur_flag << 1;
+            self.cur_flag <<= 1;
         }
         value
     }
@@ -54,8 +60,7 @@ impl Controller {
             return 1;
         }
         let cur_flag = ControllerState::from_bits_retain(self.cur_flag);
-        let value = if self.controller_state.contains(cur_flag) { 1 } else { 0 };
-        value
+        if self.controller_state.contains(cur_flag) { 1 } else { 0 }
     }
 
     pub fn write(&mut self, data: u8) {

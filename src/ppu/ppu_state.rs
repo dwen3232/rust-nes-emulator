@@ -26,6 +26,14 @@ pub struct PpuState {
     pub cycle_counter: usize,
     pub cur_scanline: usize, 
 }
+
+impl Default for PpuState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+
 impl PpuState {
     pub fn new() -> Self {
         PpuState {

@@ -83,8 +83,7 @@ impl TraceNes {
                 hex_dump.push(address_lo);
                 hex_dump.push(address_hi);
 
-                let address = bus.peek_two_bytes(program_counter + 1);
-                address
+                bus.peek_two_bytes(program_counter + 1)
             },
             _ => {panic!()}
         };
@@ -94,7 +93,7 @@ impl TraceNes {
             // length 1
             (_, AddressingMode::Implicit, _) => String::from(""),
             (_, AddressingMode::Accumulator, _) => {
-                format!("A")
+                "A".to_string()
             },
             // length 2
             (_, AddressingMode::Immediate, Param::Value(value)) => {

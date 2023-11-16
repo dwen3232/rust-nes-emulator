@@ -47,8 +47,8 @@ impl Frame {
                 for x in (0..8).rev() {
                     let hi_bit = (hi & 1) == 1;
                     let lo_bit = (lo & 1) == 1;
-                    hi = hi >> 1;
-                    lo = lo >> 1;
+                    hi >>= 1;
+                    lo >>= 1;
         
                     let rgb = match (lo_bit, hi_bit) {
                         (false, false) => palette::SYSTEM_PALLETE[palette[0]],
@@ -94,13 +94,13 @@ impl Frame {
                     'inner: for x in (0..=7).rev() {
                         let hi_bit = (hi & 1) == 1;
                         let lo_bit = (lo & 1) == 1;
-                        hi = hi >> 1;
-                        lo = lo >> 1;
+                        hi >>= 1;
+                        lo >>= 1;
                         let rgb = match (lo_bit, hi_bit) {
                             (false, false) => continue 'inner,
-                            (false, true) => palette::SYSTEM_PALLETE[palette[1] as usize],
-                            (true, false) => palette::SYSTEM_PALLETE[palette[2] as usize],
-                            (true, true) => palette::SYSTEM_PALLETE[palette[3] as usize],
+                            (false, true) => palette::SYSTEM_PALLETE[palette[1]],
+                            (true, false) => palette::SYSTEM_PALLETE[palette[2]],
+                            (true, true) => palette::SYSTEM_PALLETE[palette[3]],
                         };
                         match (flip_horizontal, flip_vertical) {
                             (false, false) => self.set_pixel(tile_x + x, tile_y + y, rgb),

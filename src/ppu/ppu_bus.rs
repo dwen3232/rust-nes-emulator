@@ -76,7 +76,6 @@ impl<'a, 'b> PpuBus<'a, 'b> {
             _ => panic!("Unexpected mirroring, nametable_index pair")
         };
 
-        let new_vram_index = (vram_index & 0b1111_0011_1111_1111) | (mirror_nametable_index << 10);
-        return new_vram_index
+        (vram_index & 0b1111_0011_1111_1111) | (mirror_nametable_index << 10)
     }
 }
