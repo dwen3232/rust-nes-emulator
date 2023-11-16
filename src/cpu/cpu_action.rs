@@ -1,11 +1,11 @@
-use crate::{
-    ppu::PpuState, 
-    controller::Controller, 
-    rom::ROM
-};
+use crate::{controller::Controller, ppu::PpuState, rom::ROM};
 
-use super::{CpuState, Instruction, instructions::{AddressingMode, Param, Opcode, InstructionMetaData}, CpuBus, CpuStatus, interrupt::{Interrupt, NMI_INTERRUPT}};
 use super::instructions::decode_opcode;
+use super::{
+    instructions::{AddressingMode, InstructionMetaData, Opcode, Param},
+    interrupt::{Interrupt, NMI_INTERRUPT},
+    CpuBus, CpuState, CpuStatus, Instruction,
+};
 
 pub struct CpuAction<'a, 'b, 'c, 'd> {
     cpu_state: &'a mut CpuState,
@@ -16,12 +16,17 @@ pub struct CpuAction<'a, 'b, 'c, 'd> {
 
 impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
     pub fn new(
-        cpu_state: &'a mut CpuState, 
-        ppu_state: &'b mut PpuState, 
+        cpu_state: &'a mut CpuState,
+        ppu_state: &'b mut PpuState,
         controller: &'c mut Controller,
         rom: &'d ROM,
     ) -> Self {
-        CpuAction { cpu_state, ppu_state, controller, rom }
+        CpuAction {
+            cpu_state,
+            ppu_state,
+            controller,
+            rom,
+        }
     }
 
     pub fn next_cpu_instruction(&mut self) -> Result<Instruction, String> {
@@ -41,25 +46,37 @@ impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
         let param = self.read_arg(&mode);
         let end_pc = self.cpu_state.program_counter;
         let length = end_pc - start_pc;
-        
+
         // 4. Execute the instruction
         self.execute_instruction(&opcode, param)?;
 
         // 5. Update cycles
         let cycles = base_cycles + self.compute_extra_cycles(&opcode, &mode);
         self.increment_cycle_counters(cycles);
-        
 
-        let meta = InstructionMetaData { cycles, mode, raw_opcode, length };
-        let instruction = Instruction { opcode, param, meta };
+        let meta = InstructionMetaData {
+            cycles,
+            mode,
+            raw_opcode,
+            length,
+        };
+        let instruction = Instruction {
+            opcode,
+            param,
+            meta,
+        };
         Ok(instruction)
-
     }
 }
 
 impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
     fn as_bus(&mut self) -> CpuBus {
-        let Self { cpu_state, ppu_state, controller, rom } = self;
+        let Self {
+            cpu_state,
+            ppu_state,
+            controller,
+            rom,
+        } = self;
         CpuBus::new(cpu_state, ppu_state, controller, rom)
     }
 
@@ -120,22 +137,43 @@ impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
         self.push_to_stack(status.bits());
 
         // Set INT_DISABLE flag depending on interrupt type
-        self.cpu_state.status.set(CpuStatus::INT_DISABLE, interrupt.is_hardware_interrupt);        
+        self.cpu_state
+            .status
+            .set(CpuStatus::INT_DISABLE, interrupt.is_hardware_interrupt);
         self.cpu_state.program_counter = self.as_bus().read_two_bytes(interrupt.vector);
     }
 
     fn compute_extra_cycles(&self, opcode: &Opcode, addressing_mode: &AddressingMode) -> u8 {
         match (opcode, addressing_mode) {
-            (Opcode::ADC | Opcode::AND | Opcode::CMP | Opcode::EOR |Opcode::LDA | 
-             Opcode::LDX | Opcode::LDY | Opcode::ORA | Opcode::SBC, 
-             AddressingMode::AbsoluteIndexX | AddressingMode::AbsoluteIndexY | AddressingMode::IndirectY) => {
-                self.cpu_state.page_cross_flag as u8
-            },
-            (Opcode::BPL | Opcode::BMI | Opcode::BVC | Opcode::BVS |
-             Opcode::BCC | Opcode::BCS | Opcode::BNE | Opcode::BEQ, _) => {
-                (self.cpu_state.branch_flag as u8) + ((self.cpu_state.branch_flag & self.cpu_state.page_cross_flag) as u8)
-            },
-            _ => 0
+            (
+                Opcode::ADC
+                | Opcode::AND
+                | Opcode::CMP
+                | Opcode::EOR
+                | Opcode::LDA
+                | Opcode::LDX
+                | Opcode::LDY
+                | Opcode::ORA
+                | Opcode::SBC,
+                AddressingMode::AbsoluteIndexX
+                | AddressingMode::AbsoluteIndexY
+                | AddressingMode::IndirectY,
+            ) => self.cpu_state.page_cross_flag as u8,
+            (
+                Opcode::BPL
+                | Opcode::BMI
+                | Opcode::BVC
+                | Opcode::BVS
+                | Opcode::BCC
+                | Opcode::BCS
+                | Opcode::BNE
+                | Opcode::BEQ,
+                _,
+            ) => {
+                (self.cpu_state.branch_flag as u8)
+                    + ((self.cpu_state.branch_flag & self.cpu_state.page_cross_flag) as u8)
+            }
+            _ => 0,
         }
     }
 }
@@ -150,22 +188,18 @@ impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
         // TODO?: I had to create bus in a couple weird places to get this to work, revisit to see if there's a better way to do this
         let mut bus = CpuBus::new(self.cpu_state, self.ppu_state, self.controller, self.rom);
         match mode {
-            AddressingMode::Implicit => {
-                Param::None
-            },
-            AddressingMode::Accumulator => {
-                Param::Value(self.cpu_state.reg_a)
-            },
+            AddressingMode::Implicit => Param::None,
+            AddressingMode::Accumulator => Param::Value(self.cpu_state.reg_a),
             AddressingMode::Immediate | AddressingMode::Relative => {
                 Param::Value(bus.read_byte_from_pc())
-            },
+            }
             AddressingMode::IndirectJump => {
                 // 6502 has a edge case with page boundary when performing indirect jumps
                 // AN INDIRECT JUMP MUST NEVER USE A VECTOR BEGINNING ON THE LAST BYTE OF A PAGE
                 // http://www.6502.org/tutorials/6502opcodes.html#JMP
 
-                // if address $3000 contains $40, $30FF contains $80, and $3100 contains $50, 
-                // the result of JMP ($30FF) will be a transfer of control to $4080 rather than $5080 as you intended 
+                // if address $3000 contains $40, $30FF contains $80, and $3100 contains $50,
+                // the result of JMP ($30FF) will be a transfer of control to $4080 rather than $5080 as you intended
                 // i.e. the 6502 took the low byte of the address from $30FF and the high byte from $3000.
 
                 // first read two bytes
@@ -181,29 +215,31 @@ impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
                 };
                 // IndirectJump does not read the address
                 Param::Address(mem_addr)
-            },
+            }
             AddressingMode::Absolute => {
                 let mem_addr = bus.read_two_bytes_from_pc();
                 Param::Address(mem_addr)
-            },
+            }
             AddressingMode::AbsoluteJump => {
                 let mem_addr = bus.read_two_bytes_from_pc();
                 // AbsoluteJump does not read the address
                 Param::Address(mem_addr)
-            },
+            }
             AddressingMode::ZeroPage => {
                 // read single byte, msb is always 0x00
                 let zero_page_addr = bus.read_byte_from_pc() as u16;
                 Param::Address(zero_page_addr)
-            },
+            }
             AddressingMode::ZeroPageIndexX => {
-                let zero_page_addr = bus.read_byte_from_pc().wrapping_add(self.cpu_state.reg_x) as u16;
+                let zero_page_addr =
+                    bus.read_byte_from_pc().wrapping_add(self.cpu_state.reg_x) as u16;
                 Param::Address(zero_page_addr)
-            },
+            }
             AddressingMode::ZeroPageIndexY => {
-                let zero_page_addr = bus.read_byte_from_pc().wrapping_add(self.cpu_state.reg_y) as u16;
+                let zero_page_addr =
+                    bus.read_byte_from_pc().wrapping_add(self.cpu_state.reg_y) as u16;
                 Param::Address(zero_page_addr)
-            },
+            }
             AddressingMode::AbsoluteIndexX => {
                 // Form <instruction> <addr>, X where <addr> is u16, specifies the value of read(<addr> + 1)
                 let orig_addr = bus.read_two_bytes_from_pc();
@@ -212,7 +248,7 @@ impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
                 let msb = (mem_addr >> 8) as u8;
                 self.cpu_state.page_cross_flag = orig_msb != msb;
                 Param::Address(mem_addr)
-            },
+            }
             AddressingMode::AbsoluteIndexY => {
                 // Same as AbsoluteIndexX, but with reg_y instead
                 let orig_addr = bus.read_two_bytes_from_pc();
@@ -221,16 +257,17 @@ impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
                 let msb = (mem_addr >> 8) as u8;
                 self.cpu_state.page_cross_flag = orig_msb != msb;
                 Param::Address(mem_addr)
-            },
+            }
             AddressingMode::IndirectX => {
                 // Form <instruction (<addr>, X), where <addr> is u8
-                let base  = bus.read_byte_from_pc();
+                let base = bus.read_byte_from_pc();
                 let zero_page_addr = (base.wrapping_add(self.cpu_state.reg_x)) as u16;
-                let mut bus = CpuBus::new(self.cpu_state, self.ppu_state, self.controller, self.rom);
+                let mut bus =
+                    CpuBus::new(self.cpu_state, self.ppu_state, self.controller, self.rom);
                 // TODO: may need to re-evaluate how this is done when there's a page cross
                 let mem_addr = bus.read_two_page_bytes(zero_page_addr);
                 Param::Address(mem_addr)
-            },
+            }
             AddressingMode::IndirectY => {
                 let zero_page_addr = bus.read_byte_from_pc() as u16;
                 // TODO: may need to re-evaluate how this is done when there's a page cross
@@ -240,252 +277,137 @@ impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
                 let msb = (mem_addr >> 8) as u8;
                 self.cpu_state.page_cross_flag = orig_msb != msb;
                 Param::Address(mem_addr)
-            },
+            }
         }
     }
-
-    
-}      
+}
 
 impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
     // TODO: this should borrow parameter
-    fn execute_instruction(&mut self, instruction: &Opcode, parameter: Param) -> Result<(), String> {
+    fn execute_instruction(
+        &mut self,
+        instruction: &Opcode,
+        parameter: Param,
+    ) -> Result<(), String> {
         // FUTURE WORK: can probably condense this more, but not really necessary
         match (instruction, parameter) {
-            (Opcode::ADC, Param::Value(val)) => {
-                self.adc(val)
-            },
+            (Opcode::ADC, Param::Value(val)) => self.adc(val),
             (Opcode::ADC, Param::Address(mem_addr)) => {
                 let byte = self.as_bus().read_byte(mem_addr);
                 self.adc(byte)
-            },
-            (Opcode::AND, Param::Value(val)) => {
-                self.and(val)
-            },
+            }
+            (Opcode::AND, Param::Value(val)) => self.and(val),
             (Opcode::AND, Param::Address(mem_addr)) => {
                 let byte = self.as_bus().read_byte(mem_addr);
                 self.and(byte)
-            },
-            (Opcode::ASL, Param::Value(val)) => {
-                self.asl_acc(val)
-            },
-            (Opcode::ASL, Param::Address(mem_addr)) => {
-                self.asl(mem_addr)
-            },
-            (Opcode::BIT, Param::Value(val)) => {
-                self.bit(val)
-            },
+            }
+            (Opcode::ASL, Param::Value(val)) => self.asl_acc(val),
+            (Opcode::ASL, Param::Address(mem_addr)) => self.asl(mem_addr),
+            (Opcode::BIT, Param::Value(val)) => self.bit(val),
             (Opcode::BIT, Param::Address(mem_addr)) => {
                 let byte = self.as_bus().read_byte(mem_addr);
                 self.bit(byte)
-            },
+            }
             // BRANCHING
-            (Opcode::BPL, Param::Value(val)) => {
-                self.bpl(val)
-            },
-            (Opcode::BMI, Param::Value(val)) => {
-                self.bmi(val)
-            },
-            (Opcode::BVC, Param::Value(val)) => {
-                self.bvc(val)
-            },
-            (Opcode::BVS, Param::Value(val)) => {
-                self.bvs(val)
-            },
-            (Opcode::BCC, Param::Value(val)) => {
-                self.bcc(val)
-            },
-            (Opcode::BCS, Param::Value(val)) => {
-                self.bcs(val)
-            },
-            (Opcode::BNE, Param::Value(val)) => {
-                self.bne(val)
-            },
-            (Opcode::BEQ, Param::Value(val)) => {
-                self.beq(val)
-            },
+            (Opcode::BPL, Param::Value(val)) => self.bpl(val),
+            (Opcode::BMI, Param::Value(val)) => self.bmi(val),
+            (Opcode::BVC, Param::Value(val)) => self.bvc(val),
+            (Opcode::BVS, Param::Value(val)) => self.bvs(val),
+            (Opcode::BCC, Param::Value(val)) => self.bcc(val),
+            (Opcode::BCS, Param::Value(val)) => self.bcs(val),
+            (Opcode::BNE, Param::Value(val)) => self.bne(val),
+            (Opcode::BEQ, Param::Value(val)) => self.beq(val),
             (Opcode::BRK, Param::None) => {
                 self.brk() // TODO: remove this, should be an interrupt type
-            },
+            }
             // COMPARISON
-            (Opcode::CMP, Param::Value(val)) => {
-                self.cmp(val)
-            },
+            (Opcode::CMP, Param::Value(val)) => self.cmp(val),
             (Opcode::CMP, Param::Address(mem_addr)) => {
                 let byte = self.as_bus().read_byte(mem_addr);
                 self.cmp(byte)
-
-            },
-            (Opcode::CPX, Param::Value(val)) => {
-                self.cpx(val)
-            },
+            }
+            (Opcode::CPX, Param::Value(val)) => self.cpx(val),
             (Opcode::CPX, Param::Address(mem_addr)) => {
                 let byte = self.as_bus().read_byte(mem_addr);
                 self.cpx(byte)
-            },
-            (Opcode::CPY, Param::Value(val)) => {
-                self.cpy(val)
-            },
+            }
+            (Opcode::CPY, Param::Value(val)) => self.cpy(val),
             (Opcode::CPY, Param::Address(mem_addr)) => {
                 let byte = self.as_bus().read_byte(mem_addr);
                 self.cpy(byte)
-            },
-            (Opcode::DEC, Param::Address(mem_addr)) => {
-                self.dec(mem_addr)
-            },
-            (Opcode::EOR, Param::Value(val)) => {
-                self.eor(val)
-            },
+            }
+            (Opcode::DEC, Param::Address(mem_addr)) => self.dec(mem_addr),
+            (Opcode::EOR, Param::Value(val)) => self.eor(val),
             (Opcode::EOR, Param::Address(mem_addr)) => {
                 let byte = self.as_bus().read_byte(mem_addr);
                 self.eor(byte)
-            },
-            (Opcode::CLC, Param::None) => {
-                self.clc()
-            },
-            (Opcode::SEC, Param::None) => {
-                self.sec()
-            },
-            (Opcode::CLI, Param::None) => {
-                self.cli()
-            },
-            (Opcode::SEI, Param::None) => {
-                self.sei()
-            },
-            (Opcode::CLV, Param::None) => {
-                self.clv()
-            },
-            (Opcode::CLD, Param::None) => {
-                self.cld()
-            },
-            (Opcode::SED, Param::None) => {
-                self.sed()
-            },
-            (Opcode::INC, Param::Address(mem_addr)) => {
-                self.inc(mem_addr)
-            },
-            (Opcode::JMP, Param::Address(mem_addr)) => {
-                self.jmp(mem_addr)
-            },
-            (Opcode::JSR, Param::Address(mem_addr)) => {
-                self.jsr(mem_addr)
-            },
-            (Opcode::LDA, Param::Value(val)) => {
-                self.lda(val)
-            },
+            }
+            (Opcode::CLC, Param::None) => self.clc(),
+            (Opcode::SEC, Param::None) => self.sec(),
+            (Opcode::CLI, Param::None) => self.cli(),
+            (Opcode::SEI, Param::None) => self.sei(),
+            (Opcode::CLV, Param::None) => self.clv(),
+            (Opcode::CLD, Param::None) => self.cld(),
+            (Opcode::SED, Param::None) => self.sed(),
+            (Opcode::INC, Param::Address(mem_addr)) => self.inc(mem_addr),
+            (Opcode::JMP, Param::Address(mem_addr)) => self.jmp(mem_addr),
+            (Opcode::JSR, Param::Address(mem_addr)) => self.jsr(mem_addr),
+            (Opcode::LDA, Param::Value(val)) => self.lda(val),
             (Opcode::LDA, Param::Address(mem_addr)) => {
                 let byte = self.as_bus().read_byte(mem_addr);
                 self.lda(byte)
-            },
-            (Opcode::LDX, Param::Value(val)) => {
-                self.ldx(val)
-            },
+            }
+            (Opcode::LDX, Param::Value(val)) => self.ldx(val),
             (Opcode::LDX, Param::Address(mem_addr)) => {
                 let byte = self.as_bus().read_byte(mem_addr);
                 self.ldx(byte)
-            },
-            (Opcode::LDY, Param::Value(val)) => {
-                self.ldy(val)
-            },
+            }
+            (Opcode::LDY, Param::Value(val)) => self.ldy(val),
             (Opcode::LDY, Param::Address(mem_addr)) => {
                 let byte = self.as_bus().read_byte(mem_addr);
                 self.ldy(byte)
-            },
-            (Opcode::LSR, Param::Value(val)) => {
-                self.lsr_acc(val)
-            },
-            (Opcode::LSR, Param::Address(mem_addr)) => {
-                self.lsr(mem_addr)
-            },
+            }
+            (Opcode::LSR, Param::Value(val)) => self.lsr_acc(val),
+            (Opcode::LSR, Param::Address(mem_addr)) => self.lsr(mem_addr),
             (Opcode::NOP, Param::None) => {
                 // TODO: implement this?
-            },
-            (Opcode::ORA, Param::Value(val)) => {
-                self.ora(val)
-            },
+            }
+            (Opcode::ORA, Param::Value(val)) => self.ora(val),
             (Opcode::ORA, Param::Address(mem_addr)) => {
                 let byte = self.as_bus().read_byte(mem_addr);
                 self.ora(byte)
-            },
+            }
             // REGISTER INSTRUCTIONS
-            (Opcode::TAX, Param::None) => {
-                self.tax()
-            },
-            (Opcode::TXA, Param::None) => {
-                self.txa()
-            },
-            (Opcode::DEX, Param::None) => {
-                self.dex()
-            },
-            (Opcode::INX, Param::None) => {
-                self.inx()
-            },
-            (Opcode::TAY, Param::None) => {
-                self.tay()
-            },
-            (Opcode::TYA, Param::None) => {
-                self.tya()
-            },
-            (Opcode::DEY, Param::None) => {
-                self.dey()
-            },
-            (Opcode::INY, Param::None) => {
-                self.iny()
-            },
-            (Opcode::ROL, Param::Value(val)) => {
-                self.rol_acc(val)
-            },
-            (Opcode::ROL, Param::Address(mem_addr)) => {
-                self.rol(mem_addr)
-            },
-            (Opcode::ROR, Param::Value(val)) => {
-                self.ror_acc(val)
-            },
-            (Opcode::ROR, Param::Address(mem_addr)) => {
-                self.ror(mem_addr)
-            },
-            (Opcode::RTI, Param::None) => {
-                self.rti()
-            },
-            (Opcode::RTS, Param::None) => {
-                self.rts()
-            },
-            (Opcode::SBC, Param::Value(val)) => {
-                self.sbc(val)
-            },
+            (Opcode::TAX, Param::None) => self.tax(),
+            (Opcode::TXA, Param::None) => self.txa(),
+            (Opcode::DEX, Param::None) => self.dex(),
+            (Opcode::INX, Param::None) => self.inx(),
+            (Opcode::TAY, Param::None) => self.tay(),
+            (Opcode::TYA, Param::None) => self.tya(),
+            (Opcode::DEY, Param::None) => self.dey(),
+            (Opcode::INY, Param::None) => self.iny(),
+            (Opcode::ROL, Param::Value(val)) => self.rol_acc(val),
+            (Opcode::ROL, Param::Address(mem_addr)) => self.rol(mem_addr),
+            (Opcode::ROR, Param::Value(val)) => self.ror_acc(val),
+            (Opcode::ROR, Param::Address(mem_addr)) => self.ror(mem_addr),
+            (Opcode::RTI, Param::None) => self.rti(),
+            (Opcode::RTS, Param::None) => self.rts(),
+            (Opcode::SBC, Param::Value(val)) => self.sbc(val),
             (Opcode::SBC, Param::Address(mem_addr)) => {
                 let byte = self.as_bus().read_byte(mem_addr);
                 self.sbc(byte)
-            },
-            // STACK INSTRUCTIONS
-            (Opcode::TXS, Param::None) => {
-                self.txs()
-            },
-            (Opcode::TSX, Param::None) => {
-                self.tsx()
-            },
-            (Opcode::PHA, Param::None) => {
-                self.pha()
-            },
-            (Opcode::PLA, Param::None) => {
-                self.pla()
-            },
-            (Opcode::PHP, Param::None) => {
-                self.php()
-            },
-            (Opcode::PLP, Param::None) => {
-                self.plp()
-            },
-            (Opcode::STA, Param::Address(mem_addr)) => {
-                self.sta(mem_addr)
-            },
-            (Opcode::STX, Param::Address(mem_addr)) => {
-                self.stx(mem_addr)
-            },
-            (Opcode::STY, Param::Address(mem_addr)) => {
-                self.sty(mem_addr)
             }
-            _ => return Err(String::from("Invalid"))
+            // STACK INSTRUCTIONS
+            (Opcode::TXS, Param::None) => self.txs(),
+            (Opcode::TSX, Param::None) => self.tsx(),
+            (Opcode::PHA, Param::None) => self.pha(),
+            (Opcode::PLA, Param::None) => self.pla(),
+            (Opcode::PHP, Param::None) => self.php(),
+            (Opcode::PLP, Param::None) => self.plp(),
+            (Opcode::STA, Param::Address(mem_addr)) => self.sta(mem_addr),
+            (Opcode::STX, Param::Address(mem_addr)) => self.stx(mem_addr),
+            (Opcode::STY, Param::Address(mem_addr)) => self.sty(mem_addr),
+            _ => return Err(String::from("Invalid")),
         };
         Ok(())
     }
@@ -493,7 +415,7 @@ impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
 
 impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
     fn adc(&mut self, parameter: u8) {
-        /// Affects Flags: N V Z C
+        // Affects Flags: N V Z C
 
         // Cast all relevant values to u16
         let reg_a = self.cpu_state.reg_a as u16;
@@ -517,7 +439,7 @@ impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
 
         self.set_zero_flag(result);
         self.set_carry_flag(sum);
-        
+
         // Set accumulator
         self.cpu_state.reg_a = result;
     }
@@ -557,9 +479,10 @@ impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
         let result = self.cpu_state.reg_a & parameter;
 
         self.set_negative_flag(parameter); // neg if bit 7 in param is 1
-        self.cpu_state.status.set(CpuStatus::OVERFLOW, parameter & 0b0100_0000 != 0); // overflow if bit 6 in param is 1
+        self.cpu_state
+            .status
+            .set(CpuStatus::OVERFLOW, parameter & 0b0100_0000 != 0); // overflow if bit 6 in param is 1
         self.set_zero_flag(result);
-        
     }
 
     // Branching functions
@@ -570,7 +493,8 @@ impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
             // ex: 11111000 -> 1111111111111000
             let parameter = (parameter as i8) as u16;
             let new_program_counter = self.cpu_state.program_counter.wrapping_add(parameter);
-            self.cpu_state.page_cross_flag = (new_program_counter >> 8) != (self.cpu_state.program_counter >> 8);
+            self.cpu_state.page_cross_flag =
+                (new_program_counter >> 8) != (self.cpu_state.program_counter >> 8);
             self.cpu_state.program_counter = self.cpu_state.program_counter.wrapping_add(parameter);
         }
     }
@@ -582,7 +506,8 @@ impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
             // ex: 11111000 -> 1111111111111000
             let parameter = (parameter as i8) as u16;
             let new_program_counter = self.cpu_state.program_counter.wrapping_add(parameter);
-            self.cpu_state.page_cross_flag = (new_program_counter >> 8) != (self.cpu_state.program_counter >> 8);
+            self.cpu_state.page_cross_flag =
+                (new_program_counter >> 8) != (self.cpu_state.program_counter >> 8);
             self.cpu_state.program_counter = self.cpu_state.program_counter.wrapping_add(parameter);
         }
     }
@@ -594,7 +519,8 @@ impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
             // ex: 11111000 -> 1111111111111000
             let parameter = (parameter as i8) as u16;
             let new_program_counter = self.cpu_state.program_counter.wrapping_add(parameter);
-            self.cpu_state.page_cross_flag = (new_program_counter >> 8) != (self.cpu_state.program_counter >> 8);
+            self.cpu_state.page_cross_flag =
+                (new_program_counter >> 8) != (self.cpu_state.program_counter >> 8);
             self.cpu_state.program_counter = self.cpu_state.program_counter.wrapping_add(parameter);
         }
     }
@@ -606,7 +532,8 @@ impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
             // ex: 11111000 -> 1111111111111000
             let parameter = (parameter as i8) as u16;
             let new_program_counter = self.cpu_state.program_counter.wrapping_add(parameter);
-            self.cpu_state.page_cross_flag = (new_program_counter >> 8) != (self.cpu_state.program_counter >> 8);
+            self.cpu_state.page_cross_flag =
+                (new_program_counter >> 8) != (self.cpu_state.program_counter >> 8);
             self.cpu_state.program_counter = self.cpu_state.program_counter.wrapping_add(parameter);
         }
     }
@@ -618,7 +545,8 @@ impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
             // ex: 11111000 -> 1111111111111000
             let parameter = (parameter as i8) as u16;
             let new_program_counter = self.cpu_state.program_counter.wrapping_add(parameter);
-            self.cpu_state.page_cross_flag = (new_program_counter >> 8) != (self.cpu_state.program_counter >> 8);
+            self.cpu_state.page_cross_flag =
+                (new_program_counter >> 8) != (self.cpu_state.program_counter >> 8);
             self.cpu_state.program_counter = self.cpu_state.program_counter.wrapping_add(parameter);
         }
     }
@@ -630,7 +558,8 @@ impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
             // ex: 11111000 -> 1111111111111000
             let parameter = (parameter as i8) as u16;
             let new_program_counter = self.cpu_state.program_counter.wrapping_add(parameter);
-            self.cpu_state.page_cross_flag = (new_program_counter >> 8) != (self.cpu_state.program_counter >> 8);
+            self.cpu_state.page_cross_flag =
+                (new_program_counter >> 8) != (self.cpu_state.program_counter >> 8);
             self.cpu_state.program_counter = self.cpu_state.program_counter.wrapping_add(parameter);
         }
     }
@@ -642,7 +571,8 @@ impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
             // ex: 11111000 -> 1111111111111000
             let parameter = (parameter as i8) as u16;
             let new_program_counter = self.cpu_state.program_counter.wrapping_add(parameter);
-            self.cpu_state.page_cross_flag = (new_program_counter >> 8) != (self.cpu_state.program_counter >> 8);
+            self.cpu_state.page_cross_flag =
+                (new_program_counter >> 8) != (self.cpu_state.program_counter >> 8);
             self.cpu_state.program_counter = self.cpu_state.program_counter.wrapping_add(parameter);
         }
     }
@@ -654,7 +584,8 @@ impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
             // ex: 11111000 -> 1111111111111000
             let parameter = (parameter as i8) as u16;
             let new_program_counter = self.cpu_state.program_counter.wrapping_add(parameter);
-            self.cpu_state.page_cross_flag = (new_program_counter >> 8) != (self.cpu_state.program_counter >> 8);
+            self.cpu_state.page_cross_flag =
+                (new_program_counter >> 8) != (self.cpu_state.program_counter >> 8);
             self.cpu_state.program_counter = self.cpu_state.program_counter.wrapping_add(parameter);
         }
     }
@@ -768,7 +699,7 @@ impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
         self.set_negative_flag(result);
         self.set_zero_flag(result);
     }
-    
+
     fn jmp(&mut self, address: u16) {
         // Affects Flags: None
         self.cpu_state.program_counter = address;
@@ -918,7 +849,7 @@ impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
         // Affects Flags: N Z C
         let mut result = (parameter as u16) << 1;
         if self.cpu_state.status.contains(CpuStatus::CARRY) {
-            result += 1;    // this should be safe from overflow
+            result += 1; // this should be safe from overflow
         }
         self.cpu_state.reg_a = result as u8;
 
@@ -932,7 +863,7 @@ impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
         let parameter = self.as_bus().read_byte(address);
         let mut result = (parameter as u16) << 1;
         if self.cpu_state.status.contains(CpuStatus::CARRY) {
-            result += 1;    // this should be safe from overflow
+            result += 1; // this should be safe from overflow
         }
         self.as_bus().write_byte(address, result as u8);
 
@@ -948,7 +879,7 @@ impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
             result += 0b1000_0000;
         }
         self.cpu_state.reg_a = result;
-        
+
         self.set_negative_flag(result);
         self.set_zero_flag(result);
         // Special carry flag case
@@ -967,7 +898,7 @@ impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
             result += 0b1000_0000;
         }
         self.as_bus().write_byte(address, result);
-        
+
         self.set_negative_flag(result);
         self.set_zero_flag(result);
         // Special carry flag case
@@ -980,7 +911,7 @@ impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
 
     fn rti(&mut self) {
         // Affected Flags: All
-        self.plp();     // pop status from stack
+        self.plp(); // pop status from stack
         let lsb = self.pop_from_stack() as u16;
         let msb = self.pop_from_stack() as u16;
         self.cpu_state.program_counter = (msb << 8) + lsb;
@@ -997,7 +928,7 @@ impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
         // Affects Flags: N V Z C
         // Can just use ADC internally
         self.adc(parameter ^ 0b1111_1111) // toggle every bit and pass to adc
-    }   
+    }
 
     fn txs(&mut self) {
         // Affects Flags: None

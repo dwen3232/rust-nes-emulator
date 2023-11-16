@@ -2,7 +2,6 @@ use std::env;
 
 use rust_nes_emulator::screen::run;
 
-
 fn main() {
     let args: Vec<String> = env::args().collect();
     if let Some(path) = args.get(1) {

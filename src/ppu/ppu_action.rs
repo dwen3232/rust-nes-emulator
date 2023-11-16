@@ -1,6 +1,6 @@
-use crate::rom::{ROM};
+use crate::rom::ROM;
 
-use super::{PpuState, ppu_state::PpuStatus, PpuBus};
+use super::{ppu_state::PpuStatus, PpuBus, PpuState};
 
 pub struct PpuAction<'a, 'b> {
     ppu_state: &'a mut PpuState,
@@ -120,6 +120,8 @@ impl<'a, 'b> PpuAction<'a, 'b> {
         let y = self.ppu_state.oam_data[0] as usize;
         let x = self.ppu_state.oam_data[3] as usize;
         // we check <= cycle_counter because ppu is not being simulated tick by tick
-        (y ==self.ppu_state.cur_scanline) && (x <= self.ppu_state.cycle_counter) && self.ppu_state.ppumask.is_show_sprites()
+        (y == self.ppu_state.cur_scanline)
+            && (x <= self.ppu_state.cycle_counter)
+            && self.ppu_state.ppumask.is_show_sprites()
     }
 }

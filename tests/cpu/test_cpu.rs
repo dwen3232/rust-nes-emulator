@@ -1,9 +1,8 @@
-use std::fs::{OpenOptions, remove_file, read_to_string};
+use std::fs::{read_to_string, remove_file, OpenOptions};
 use std::io::Write;
 
 use rust_nes_emulator::cpu::Opcode;
 use rust_nes_emulator::tracer::TraceNes;
-
 
 #[test]
 fn test_cpu_official_opcodes_nestest() {
@@ -22,7 +21,9 @@ fn test_cpu_official_opcodes_nestest() {
     let mut nes = TraceNes::new().setup();
     println!("Loading from path");
     for _ in 0..5002 {
-        let instruction = nes.next_cpu_instruction().expect("Failed to run instruction");
+        let instruction = nes
+            .next_cpu_instruction()
+            .expect("Failed to run instruction");
         if instruction.opcode == Opcode::BRK {
             break;
         }
@@ -47,7 +48,6 @@ fn test_cpu_official_opcodes_nestest() {
     // assert_eq!(cpu.read_byte(0x600), 0);
 }
 
-
 #[test]
 fn test_cpu_official_opcodes_nestest_cycles() {
     // Tests only the official opcodes
@@ -65,7 +65,9 @@ fn test_cpu_official_opcodes_nestest_cycles() {
     let mut nes = TraceNes::new().setup();
     println!("Loading from path");
     for _ in 0..5002 {
-        let instruction = nes.next_cpu_instruction().expect("Failed to run instruction");
+        let instruction = nes
+            .next_cpu_instruction()
+            .expect("Failed to run instruction");
         if instruction.opcode == Opcode::BRK {
             break;
         }

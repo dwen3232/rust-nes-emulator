@@ -1,15 +1,12 @@
-use crate::controller::{ControllerState, Controller};
-use crate::cpu::{
-    CpuAction, CpuState, Instruction, CpuBus
-};
+use crate::controller::{Controller, ControllerState};
+use crate::cpu::{CpuAction, CpuBus, CpuState, Instruction};
 // use crate::ppu::ppu_state::PpuState;
-use crate::ppu::{PpuState, PpuAction};
+use crate::ppu::{PpuAction, PpuState};
 use crate::rom::ROM;
-
 
 pub trait NES {
     // pub fn next_cpu_cycle();
-    
+
     // Updates state to after next CPU instruction
     fn next_cpu_instruction(&mut self) -> Result<Instruction, String>;
 
@@ -17,7 +14,7 @@ pub trait NES {
     fn next_ppu_frame(&mut self) -> Result<(), String>;
 
     fn update_controller(&mut self, key: ControllerState, bit: bool);
-    
+
     // Loads a program
     fn set_rom(&mut self, rom: ROM) -> Result<(), String>;
 
@@ -49,21 +46,29 @@ impl ActionNES {
 
     // TODO: may want to revisit how this is done? Maybe implement From?
     fn as_cpu_action(&mut self) -> CpuAction {
-        CpuAction::new(&mut self.cpu_state, &mut self.ppu_state, &mut self.controller, &self.rom)
+        CpuAction::new(
+            &mut self.cpu_state,
+            &mut self.ppu_state,
+            &mut self.controller,
+            &self.rom,
+        )
     }
 
     // fn as_ppu_action(&mut self) -> PpuAction {}
 
     // TODO: change testing logic so that this doesn't have to be public!
     pub fn as_cpu_bus(&mut self) -> CpuBus {
-        CpuBus::new(&mut self.cpu_state, &mut self.ppu_state, &mut self.controller, &self.rom)
+        CpuBus::new(
+            &mut self.cpu_state,
+            &mut self.ppu_state,
+            &mut self.controller,
+            &self.rom,
+        )
     }
 
     pub fn as_ppu_action(&mut self) -> PpuAction {
         PpuAction::new(&mut self.ppu_state, &self.rom)
     }
-    
-        
 }
 
 impl NES for ActionNES {
@@ -75,7 +80,7 @@ impl NES for ActionNES {
     }
 
     // Updates state to after next PPU cycle (next frame)
-    fn next_ppu_frame(&mut self) -> Result<(), String>{
+    fn next_ppu_frame(&mut self) -> Result<(), String> {
         // TODO: need to run CPU instructions until we're at the next frame
         // Some Rust while loop black magic
         // let mut count = 1;
@@ -92,9 +97,9 @@ impl NES for ActionNES {
     fn update_controller(&mut self, key: ControllerState, bit: bool) {
         self.controller.controller_state.set(key, bit);
     }
-    
+
     // Loads a program
-    fn set_rom(&mut self, rom: ROM) -> Result<(), String>{
+    fn set_rom(&mut self, rom: ROM) -> Result<(), String> {
         self.rom = rom;
         Ok(())
     }
@@ -122,6 +127,4 @@ impl NES for ActionNES {
     fn peek_ppu_state(&self) -> PpuState {
         self.ppu_state
     }
-    
 }
-

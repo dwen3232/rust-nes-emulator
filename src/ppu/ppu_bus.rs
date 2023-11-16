@@ -1,4 +1,4 @@
-use crate::rom::{ROM, Mirroring};
+use crate::rom::{Mirroring, ROM};
 
 use super::PpuState;
 
@@ -8,28 +8,26 @@ pub struct PpuBus<'a, 'b> {
 }
 
 impl<'a, 'b> PpuBus<'a, 'b> {
-    pub fn new(ppu_state: &'a mut PpuState, rom: &'b ROM) -> Self{
+    pub fn new(ppu_state: &'a mut PpuState, rom: &'b ROM) -> Self {
         PpuBus { ppu_state, rom }
     }
 
     pub fn read_byte(&mut self, index: u16) -> u8 {
         match index {
-            0x0000..=0x1FFF => {
-                self.rom.chr_rom[index as usize]
-            },
+            0x0000..=0x1FFF => self.rom.chr_rom[index as usize],
             0x2000..=0x2FFF => {
                 let vram_index = self.mirror_vram_addr(index);
                 self.ppu_state.ram[vram_index as usize]
-            },
+            }
             0x3000..=0x3EFF => {
                 // map to 0x2000...0x2EFF
-                let masked_index = index & 0b1110_1111_1111_1111;   
+                let masked_index = index & 0b1110_1111_1111_1111;
                 let vram_index = self.mirror_vram_addr(masked_index);
                 self.ppu_state.ram[vram_index as usize]
-            },
+            }
             0x3F00..=0x3F1F => todo!(),
             0x3F20..=0x3FFF => todo!(),
-            _ => panic!("Unexpected address")
+            _ => panic!("Unexpected address"),
         }
     }
 
@@ -40,23 +38,23 @@ impl<'a, 'b> PpuBus<'a, 'b> {
             0x2000..=0x2FFF => {
                 let vram_index = self.mirror_vram_addr(index);
                 self.ppu_state.ram[vram_index as usize] = value;
-            },
+            }
             0x3000..=0x3EFF => {
                 // map to 0x2000...0x2EFF
                 let masked_index = index & 0b1110_1111_1111_1111;
                 let vram_index = self.mirror_vram_addr(masked_index);
                 self.ppu_state.ram[vram_index as usize] = value;
-            },
+            }
             0x3F00..=0x3FFF => {
                 // 0x3F20..=0x3FFF mirrors 0x3F00..=0x3FFF
                 let masked_index = index & 0b0000_0000_0001_1111;
                 let palette_index = match masked_index {
                     0x0010 | 0x0014 | 0x0018 | 0x001C => masked_index - 0x10,
-                    _ => masked_index
+                    _ => masked_index,
                 };
                 self.ppu_state.palette_table[palette_index as usize] = value;
-            },
-            _ => panic!("Unexpected address")
+            }
+            _ => panic!("Unexpected address"),
         }
     }
 
@@ -73,7 +71,7 @@ impl<'a, 'b> PpuBus<'a, 'b> {
             (Mirroring::Vertical, 1) => 1,
             (Mirroring::Vertical, 2) => 0,
             (Mirroring::Vertical, 3) => 1,
-            _ => panic!("Unexpected mirroring, nametable_index pair")
+            _ => panic!("Unexpected mirroring, nametable_index pair"),
         };
 
         (vram_index & 0b1111_0011_1111_1111) | (mirror_nametable_index << 10)

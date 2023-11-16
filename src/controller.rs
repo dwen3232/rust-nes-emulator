@@ -1,5 +1,3 @@
-
-
 use bitflags::bitflags;
 
 bitflags! {
@@ -48,7 +46,11 @@ impl Controller {
             return 1;
         }
         let cur_flag = ControllerState::from_bits_retain(self.cur_flag);
-        let value = if self.controller_state.contains(cur_flag) { 1 } else { 0 };
+        let value = if self.controller_state.contains(cur_flag) {
+            1
+        } else {
+            0
+        };
         if !self.strobe {
             self.cur_flag <<= 1;
         }
@@ -60,14 +62,17 @@ impl Controller {
             return 1;
         }
         let cur_flag = ControllerState::from_bits_retain(self.cur_flag);
-        if self.controller_state.contains(cur_flag) { 1 } else { 0 }
+        if self.controller_state.contains(cur_flag) {
+            1
+        } else {
+            0
+        }
     }
 
     pub fn write(&mut self, data: u8) {
         self.cur_flag = 1;
         self.strobe = (data & 1) == 1;
     }
-
 }
 
 #[cfg(test)]

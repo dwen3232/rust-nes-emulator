@@ -1,8 +1,5 @@
 use bitflags::bitflags;
 
-
-
-
 const STACK_POINTER_INIT: u8 = 0xFD;
 const PROGRAM_COUNTER_INIT: u16 = 0x600;
 
@@ -45,8 +42,8 @@ impl CpuState {
             reg_y: 0,
             // status: CpuStatus::ALWAYS | CpuStatus::BRK,
             status: CpuStatus::ALWAYS | CpuStatus::INT_DISABLE,
-            stack_pointer: STACK_POINTER_INIT,      // probably needs to initialize to something else
-            program_counter: PROGRAM_COUNTER_INIT,      // same here
+            stack_pointer: STACK_POINTER_INIT, // probably needs to initialize to something else
+            program_counter: PROGRAM_COUNTER_INIT, // same here
             page_cross_flag: false,
             branch_flag: false,
             irq_interrupt_poll: None,
@@ -56,7 +53,6 @@ impl CpuState {
 
     // TODO: should this reset the rest of the state as well?
     pub fn reset(&mut self) {
-        
         self.reg_a = 0;
         self.reg_x = 0;
         self.reg_y = 0;

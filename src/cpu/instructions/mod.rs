@@ -23,91 +23,92 @@ pub struct InstructionMetaData {
 
 // TODO! This is a misuse of Enums, make Opcode an Enum with no value and change the current implementation to a struct
 #[derive(Debug, PartialEq, Clone, Copy)]
-pub enum Opcode { // Reorder these at some point to something more logical
-    ADC, 
-    AND, 
-    ASL, 
+pub enum Opcode {
+    // Reorder these at some point to something more logical
+    ADC,
+    AND,
+    ASL,
     BIT,
     // Branching instructions
-    BPL, 
-    BMI, 
-    BVC, 
-    BVS, 
-    BCC, 
-    BCS, 
-    BNE, 
-    BEQ, 
+    BPL,
+    BMI,
+    BVC,
+    BVS,
+    BCC,
+    BCS,
+    BNE,
+    BEQ,
     BRK,
-    CMP, 
-    CPX, 
-    CPY, 
-    DEC, 
+    CMP,
+    CPX,
+    CPY,
+    DEC,
     EOR,
     // Flag instructions
-    CLC, 
+    CLC,
     SEC,
     CLI,
-    SEI, 
-    CLV, 
-    CLD, 
+    SEI,
+    CLV,
+    CLD,
     SED,
-    INC, 
-    JMP, 
-    JSR, 
-    LDA, 
-    LDX, 
-    LDY, 
-    LSR, 
-    NOP, 
+    INC,
+    JMP,
+    JSR,
+    LDA,
+    LDX,
+    LDY,
+    LSR,
+    NOP,
     ORA,
     // Register instructions
-    TAX, 
-    TXA, 
-    DEX, 
-    INX, 
-    TAY, 
-    TYA, 
-    DEY, 
-    INY, 
-    ROL, 
-    ROR, 
-    RTI, 
-    RTS, 
+    TAX,
+    TXA,
+    DEX,
+    INX,
+    TAY,
+    TYA,
+    DEY,
+    INY,
+    ROL,
+    ROR,
+    RTI,
+    RTS,
     SBC,
     // Stack instructions
-    TXS, 
-    TSX, 
-    PHA, 
-    PLA, 
-    PHP, 
+    TXS,
+    TSX,
+    PHA,
+    PLA,
+    PHP,
     PLP,
-    STA, 
-    STX, 
+    STA,
+    STX,
     STY,
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
-pub enum Param {    // used by an instruction
+pub enum Param {
+    // used by an instruction
     Value(u8),
     Address(u16),
-    None
+    None,
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum AddressingMode {
-    Implicit,           // implicit
-    Accumulator,        // val = A
-    Immediate,          // val = arg8  
-    IndirectJump,       // val = peek(arg16), only used by JMP
-    Relative,           // val = arg8, offset
-    Absolute,           // val = peek(arg16)
-    AbsoluteJump,       // val = arg16, only used by JMP (I think, also this might be wrong)
-    ZeroPage,           // val = peek(arg8)
-    ZeroPageIndexX,     // val = peek((arg8 + X) % 256)
+    Implicit,       // implicit
+    Accumulator,    // val = A
+    Immediate,      // val = arg8
+    IndirectJump,   // val = peek(arg16), only used by JMP
+    Relative,       // val = arg8, offset
+    Absolute,       // val = peek(arg16)
+    AbsoluteJump,   // val = arg16, only used by JMP (I think, also this might be wrong)
+    ZeroPage,       // val = peek(arg8)
+    ZeroPageIndexX, // val = peek((arg8 + X) % 256)
     ZeroPageIndexY,
-    AbsoluteIndexX,     // val = peek(arg16 + X)
-    AbsoluteIndexY,     // val = peek(arg16 + Y)
-    IndirectX,          // val = peek(peek((arg + X) % 256) + PEEK((arg + X + 1) % 256) * 256)
-    IndirectY,          
+    AbsoluteIndexX, // val = peek(arg16 + X)
+    AbsoluteIndexY, // val = peek(arg16 + Y)
+    IndirectX,      // val = peek(peek((arg + X) % 256) + PEEK((arg + X + 1) % 256) * 256)
+    IndirectY,
 }
-

@@ -1,4 +1,3 @@
-
 // ~~~FULL FILE FORMAT:
 // Header (16 bytes)
 // Trainer, if present (0 or 512 bytes)
@@ -11,29 +10,30 @@
 // $8000–$FFFF = Usual ROM, commonly with Mapper Registers (see MMC1 and UxROM for example)
 // UxROM Ref: https://www.nesdev.org/wiki/UxROM
 
-use std::fs::{read};
+use std::fs::read;
 
 const HEADER_TAG: [u8; 4] = [0x4E, 0x45, 0x53, 0x1A];
 const PRG_ROM_PAGE_SIZE: usize = 16384; // 16 KB page size
-const CHR_ROM_PAGE_SIZE: usize = 8192;  // 8 KB page size
+const CHR_ROM_PAGE_SIZE: usize = 8192; // 8 KB page size
 
 // For flag 6
-const MIRROR_MASK: u8 =      0b0000_0001;
-const CARTRIDGE_MASK: u8 =   0b0000_0010;
-const TRAINER_MASK: u8 =     0b0000_0100;
+const MIRROR_MASK: u8 = 0b0000_0001;
+const CARTRIDGE_MASK: u8 = 0b0000_0010;
+const TRAINER_MASK: u8 = 0b0000_0100;
 const FOUR_SCREEN_MASK: u8 = 0b0000_1000;
 
 // For flag 7
-const VS_UNISYS_MASK: u8 =   0b0000_0001;
-const PLAYCHOICE_MASK: u8 =  0b0000_0010;
+const VS_UNISYS_MASK: u8 = 0b0000_0001;
+const PLAYCHOICE_MASK: u8 = 0b0000_0010;
 
 pub const PRG_ROM_SIZE: usize = PRG_ROM_PAGE_SIZE * u8::MAX as usize;
 pub const CHR_ROM_SIZE: usize = CHR_ROM_PAGE_SIZE * u8::MAX as usize;
 
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Mirroring {
-    Vertical, Horizontal, FourScreen,
+    Vertical,
+    Horizontal,
+    FourScreen,
 }
 
 // Representation for a cartridge. Uses .nes file format
@@ -72,7 +72,8 @@ impl ROM {
         Self::from(program)
     }
 
-    pub fn from(raw: Vec<u8>) -> Result<Self, String>{
+    #[allow(unused_variables)]
+    pub fn from(raw: Vec<u8>) -> Result<Self, String> {
         // First, decode the header
         // ~~~HEADER FORMAT:
         // 0-3	Constant $4E $45 $53 $1A (ASCII "NES" followed by MS-DOS end-of-file)
@@ -91,7 +92,7 @@ impl ROM {
         }
         let prg_rom_size = PRG_ROM_PAGE_SIZE * (raw[4] as usize);
         let chr_rom_size = CHR_ROM_PAGE_SIZE * (raw[5] as usize);
-        println!{"Found prg_rom_size of {:x}, or {} pages", prg_rom_size, raw[4]}
+        println! {"Found prg_rom_size of {:x}, or {} pages", prg_rom_size, raw[4]}
         // ~~FLAG 6:
         // 76543210
         // ||||||||
@@ -117,10 +118,10 @@ impl ROM {
         // ||||++--- If equal to 2, flags 8-15 are in NES 2.0 format
         // ++++----- Upper nybble of mapper number
         let flag_7_byte = raw[7];
-        // let vs_unisys = flag_7_byte & VS_UNISYS_MASK != 0;
-        // let playchoice = flag_7_byte & PLAYCHOICE_MASK != 0;
+        let vs_unisys = flag_7_byte & VS_UNISYS_MASK != 0;
+        let playchoice = flag_7_byte & PLAYCHOICE_MASK != 0;
         let nes_format = (flag_7_byte >> 2) & 0b0000_0011;
-        let mapper_number_msb = flag_7_byte & 0b1111_0000;  // Don't shift this
+        let mapper_number_msb = flag_7_byte & 0b1111_0000; // Don't shift this
 
         if nes_format != 0 {
             return Err("Currently do not support NES2.0 format".to_string());
@@ -129,23 +130,21 @@ impl ROM {
         let mirroring = match (four_screen, mirror) {
             (true, _) => Mirroring::FourScreen,
             (_, true) => Mirroring::Vertical,
-            (_, _)    => Mirroring::Horizontal,
+            (_, _) => Mirroring::Horizontal,
         };
         let mapper = mapper_number_msb + mapper_number_lsb;
         // If there is a trainer, then the trainer block is 512, otherwise 0
-        let prg_rom_start = 16 + if trainer{ 512 } else {0};
+        let prg_rom_start = 16 + if trainer { 512 } else { 0 };
         // chr_rom starts after prg_rom
         let chr_rom_start = prg_rom_start + prg_rom_size;
 
         Ok(ROM {
             mirroring,
             mapper,
-            prg_rom: raw[prg_rom_start .. (prg_rom_start + prg_rom_size)].to_vec(),
-            chr_rom: raw[chr_rom_start .. (chr_rom_start + chr_rom_size)].to_vec(),
+            prg_rom: raw[prg_rom_start..(prg_rom_start + prg_rom_size)].to_vec(),
+            chr_rom: raw[chr_rom_start..(chr_rom_start + chr_rom_size)].to_vec(),
         })
     }
-
-
 }
 
 #[cfg(test)]

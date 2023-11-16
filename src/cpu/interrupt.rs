@@ -1,9 +1,10 @@
 /**
  * https://www.nesdev.org/wiki/CPU_interrupts
  * https://www.nesdev.org/wiki/Status_flags
- * 
+ *
  */
 
+#[allow(dead_code)]
 pub enum InterruptKind {
     NMI,
     RESET,
@@ -26,6 +27,7 @@ pub const NMI_INTERRUPT: Interrupt = Interrupt {
     is_hardware_interrupt: true,
 };
 
+#[allow(dead_code)]
 pub const IRQ_INTERRUPT: Interrupt = Interrupt {
     kind: InterruptKind::IRQ,
     vector: 0xFFFE,

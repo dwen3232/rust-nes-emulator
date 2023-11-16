@@ -1,6 +1,5 @@
 // * THIS IS COMPLETE
-use super::{Opcode, AddressingMode, CpuCycleUnit};
-
+use super::{AddressingMode, CpuCycleUnit, Opcode};
 
 /// Decodes a raw byte to
 ///     1. An Opcode corresponding to the instruction type
@@ -312,9 +311,7 @@ pub fn decode_opcode(opcode: u8) -> Result<(Opcode, AddressingMode, CpuCycleUnit
         0x84 => (Opcode::STY, AddressingMode::ZeroPage, 3),
         0x94 => (Opcode::STY, AddressingMode::ZeroPageIndexX, 4),
         0x8C => (Opcode::STY, AddressingMode::Absolute, 4),
-        _ => {
-            return Err(format!("Opcode not implemented {:02x}", opcode))
-        }
+        _ => return Err(format!("Opcode not implemented {:02x}", opcode)),
     };
     Ok(result)
 }

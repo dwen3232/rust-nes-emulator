@@ -1,7 +1,5 @@
 use std::mem::transmute;
 
-
-
 // use crate::ppu::PPU;
 
 use crate::{ppu::PpuState, rom::ROM};
@@ -12,7 +10,7 @@ pub const WIDTH: usize = 256;
 pub const HEIGHT: usize = 240;
 
 pub struct Frame {
-    pub data: [(u8, u8, u8); WIDTH * HEIGHT]
+    pub data: [(u8, u8, u8); WIDTH * HEIGHT],
 }
 
 impl Default for Frame {
@@ -23,16 +21,19 @@ impl Default for Frame {
 
 impl Frame {
     pub fn new() -> Self {
-        Frame { data: [(0, 0, 0); WIDTH * HEIGHT] }
+        Frame {
+            data: [(0, 0, 0); WIDTH * HEIGHT],
+        }
     }
 
     pub fn set_pixel(&mut self, x: usize, y: usize, color: (u8, u8, u8)) {
-        let index = WIDTH*y + x;
+        let index = WIDTH * y + x;
         if index < WIDTH * HEIGHT {
-            self.data[WIDTH*y + x] = color;
+            self.data[WIDTH * y + x] = color;
         }
     }
-    
+
+    // TODO: first few rendered lines are usually invisible, maybe implement that?
     pub fn render(&mut self, ppu: &PpuState, rom: &ROM) {
         // Renders the background
         let bank = ppu.ppuctrl.get_background_pattern_addr() as usize;
@@ -55,7 +56,7 @@ impl Frame {
                     let lo_bit = (lo & 1) == 1;
                     hi >>= 1;
                     lo >>= 1;
-        
+
                     let rgb = match (lo_bit, hi_bit) {
                         (false, false) => palette::SYSTEM_PALLETE[palette[0]],
                         (false, true) => palette::SYSTEM_PALLETE[palette[1]],
@@ -117,7 +118,6 @@ impl Frame {
                     }
                 }
             }
-            
         }
     }
 
@@ -134,7 +134,7 @@ impl Frame {
             (1, 0) => (palette_byte >> 2) & 0b11,
             (0, 1) => (palette_byte >> 4) & 0b11,
             (1, 1) => (palette_byte >> 6) & 0b11,
-            _ => panic!("impossible")
+            _ => panic!("impossible"),
         };
         // $3F01-$3F03	Background palette 0
         // $3F05-$3F07	Background palette 1
@@ -153,7 +153,7 @@ impl Frame {
         // Gets the palette for a sprite
         let start = 0x11 + (pallete_idx * 4) as usize;
         [
-            0,  // Always transparent
+            0, // Always transparent
             ppu.palette_table[start] as usize,
             ppu.palette_table[start + 1] as usize,
             ppu.palette_table[start + 2] as usize,

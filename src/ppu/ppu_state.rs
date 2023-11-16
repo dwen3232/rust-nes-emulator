@@ -1,19 +1,15 @@
 use bitflags::bitflags;
 
-
-
-
-
 #[derive(Debug, Clone, Copy)]
 pub struct PpuState {
     pub ram: [u8; 0x800],
     pub oam_data: [u8; 256],
     pub palette_table: [u8; 32],
-    
+
     // registers
     pub ppuctrl: PpuControl,
     pub ppumask: PpuMask,
-    pub ppustatus:PpuStatus,
+    pub ppustatus: PpuStatus,
     pub oamaddr: OamAddr,
     pub ppuscroll: PpuScroll,
     pub ppuaddr: PpuAddr,
@@ -24,7 +20,7 @@ pub struct PpuState {
 
     // metadata
     pub cycle_counter: usize,
-    pub cur_scanline: usize, 
+    pub cur_scanline: usize,
 }
 
 impl Default for PpuState {
@@ -32,7 +28,6 @@ impl Default for PpuState {
         Self::new()
     }
 }
-
 
 impl PpuState {
     pub fn new() -> Self {
@@ -49,7 +44,7 @@ impl PpuState {
             ppudata: 0,
             cycle_counter: 0,
             cur_scanline: 0,
-            nmi_interrupt_poll: None
+            nmi_interrupt_poll: None,
         }
     }
 }
@@ -86,7 +81,6 @@ bitflags! {
     }
 }
 
-
 impl PpuControl {
     pub fn get_name_table_addr(&self) -> u16 {
         match self.bits() & 0b11 {
@@ -94,7 +88,7 @@ impl PpuControl {
             0b01 => 0x2400,
             0b10 => 0x2800,
             0b11 => 0x2C00,
-            _ => panic!("impossible")
+            _ => panic!("impossible"),
         }
     }
 
@@ -144,7 +138,6 @@ impl PpuControl {
     }
 }
 
-
 bitflags! {
     // 7  bit  0
     // ---- ----
@@ -192,7 +185,6 @@ impl PpuMask {
         self.contains(PpuMask::SHOW_SPRITES)
     }
 }
-
 
 bitflags! {
     // 7  bit  0
@@ -247,7 +239,7 @@ impl PpuStatus {
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct OamAddr {
-    data: u8
+    data: u8,
 }
 
 impl OamAddr {
@@ -266,15 +258,13 @@ impl OamAddr {
         // TODO: check this is correct
         self.data = self.data.wrapping_add(1);
     }
-
 }
-
 
 #[derive(Debug, Clone, Copy)]
 pub struct PpuScroll {
     cam_position_x: u8,
     cam_position_y: u8,
-    is_set_position_x: bool
+    is_set_position_x: bool,
 }
 
 impl Default for PpuScroll {
@@ -287,7 +277,11 @@ impl Default for PpuScroll {
 // TODO: check this
 impl PpuScroll {
     pub fn new() -> Self {
-        PpuScroll { cam_position_x: 0, cam_position_y: 0, is_set_position_x: true}
+        PpuScroll {
+            cam_position_x: 0,
+            cam_position_y: 0,
+            is_set_position_x: true,
+        }
     }
 
     pub fn write(&mut self, byte: u8) {
@@ -299,7 +293,7 @@ impl PpuScroll {
         self.is_set_position_x = !self.is_set_position_x; // flip the bool
     }
 
-    pub fn read(&self) -> (u8, u8) { 
+    pub fn read(&self) -> (u8, u8) {
         // Returns (cam_position_x, cam_position_y)
         todo!()
     }
@@ -307,15 +301,12 @@ impl PpuScroll {
     pub fn reset(&mut self) {
         self.is_set_position_x = true;
     }
-    
 }
-
-
 
 #[derive(Debug, Clone, Copy)]
 pub struct PpuAddr {
     data: (u8, u8),
-    is_set_msb: bool
+    is_set_msb: bool,
 }
 
 impl Default for PpuAddr {
@@ -326,7 +317,10 @@ impl Default for PpuAddr {
 
 impl PpuAddr {
     pub fn new() -> Self {
-        PpuAddr { data: (0, 0), is_set_msb: true}
+        PpuAddr {
+            data: (0, 0),
+            is_set_msb: true,
+        }
     }
 
     pub fn write(&mut self, byte: u8) {
@@ -338,7 +332,7 @@ impl PpuAddr {
         self.is_set_msb = !self.is_set_msb; // flip the bool
     }
 
-    pub fn read(&self) -> u16 { 
+    pub fn read(&self) -> u16 {
         let msb = self.data.1 as u16;
         let lsb = self.data.0 as u16;
         (msb << 8) + lsb
@@ -353,13 +347,13 @@ impl PpuAddr {
     pub fn reset(&mut self) {
         self.is_set_msb = true;
     }
-    
 }
 
 type PpuData = u8;
 
+#[cfg(test)]
 mod tests {
-    
+    use super::*;
 
     #[test]
     fn test_initialization() {

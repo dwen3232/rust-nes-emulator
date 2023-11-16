@@ -1,18 +1,12 @@
 use std::collections::HashMap;
 
-
-
-
-
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 
 use sdl2::pixels::PixelFormatEnum;
 
-
 use crate::nes::ActionNES;
 use crate::nes::NES;
-
 
 use crate::controller::ControllerState;
 
@@ -20,7 +14,6 @@ use self::frame::Frame;
 
 pub mod frame;
 pub mod palette;
-
 
 // Make this function runnable with an NES object as an input
 #[allow(unused)]
@@ -68,7 +61,7 @@ pub fn run(path: &str) {
         canvas.copy(&texture, None, None);
         canvas.present();
 
-        // 3. Read user input 
+        // 3. Read user input
         for event in event_pump.poll_iter() {
             match event {
                 Event::Quit { .. }
@@ -81,13 +74,13 @@ pub fn run(path: &str) {
                         nes.update_controller(*key, true);
                         // controller_state.insert(*key);
                     }
-                },
-                Event::KeyUp{ keycode, .. } => {
+                }
+                Event::KeyUp { keycode, .. } => {
                     if let Some(key) = key_map.get(&keycode.unwrap_or(Keycode::Ampersand)) {
                         nes.update_controller(*key, false);
                         // controller_state.remove(*key);
                     }
-                },
+                }
                 _ => {}
             }
         }
