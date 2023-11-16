@@ -1,4 +1,4 @@
-#![allow(dead_code, unused, unused_imports)]
+#![allow(clippy::upper_case_acronyms)]
 
 pub mod nes;
 pub mod cpu;

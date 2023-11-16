@@ -214,7 +214,7 @@ bitflags! {
     //         Set at dot 1 of line 241 (the line *after* the post-render
     //         line); cleared after reading $2002 and at dot 1 of the
     //         pre-render line.
-    #[derive(Debug, Clone, Copy)]
+    #[derive(Debug, Default, Clone, Copy)]
     pub struct PpuStatus: u8 {
         const UNUSED_0 =         0b0000_0001;
         const UNUSED_1 =         0b0000_0010;
@@ -245,7 +245,7 @@ impl PpuStatus {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct OamAddr {
     data: u8
 }
@@ -277,7 +277,11 @@ pub struct PpuScroll {
     is_set_position_x: bool
 }
 
-
+impl Default for PpuScroll {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 // Horizontal offsets range from 0 to 255. "Normal" vertical offsets range from 0 to 239, while values of 240 to 255 are treated as -16 through -1 in a way, but tile data is incorrectly fetched from the attribute table.
 // Implies that reading from this is different
 // TODO: check this
@@ -312,6 +316,12 @@ impl PpuScroll {
 pub struct PpuAddr {
     data: (u8, u8),
     is_set_msb: bool
+}
+
+impl Default for PpuAddr {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl PpuAddr {

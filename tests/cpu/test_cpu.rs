@@ -34,7 +34,7 @@ fn test_cpu_official_opcodes_nestest() {
 
     let expected_log: Vec<String> = read_to_string("logs/nestest.log")
         .expect("Failed to read input")
-        .split("\n")
+        .split('\n')
         .map(|s| s.trim_end().to_string())
         .collect();
 
@@ -77,7 +77,7 @@ fn test_cpu_official_opcodes_nestest_cycles() {
 
     let expected_log: Vec<String> = read_to_string("logs/nestest_ppu_cyc.log")
         .expect("Failed to read input")
-        .split("\n")
+        .split('\n')
         .map(|s| s.trim_end().to_string())
         .collect();
 
