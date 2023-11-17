@@ -14,6 +14,7 @@ use self::frame::Frame;
 
 pub mod frame;
 pub mod palette;
+pub mod emscripten;
 
 // Make this function runnable with an NES object as an input
 #[allow(unused)]
@@ -86,3 +87,4 @@ pub fn run(path: &str) {
         }
     }
 }
+
