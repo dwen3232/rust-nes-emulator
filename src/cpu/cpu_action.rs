@@ -1,3 +1,4 @@
+use crate::ppu::PpuAction;
 use crate::{controller::Controller, ppu::PpuState, rom::ROM};
 
 use super::instructions::decode_opcode;
@@ -67,6 +68,25 @@ impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
         };
         Ok(instruction)
     }
+
+    fn execute_interrupt(&mut self, interrupt: Interrupt) {
+        // TODO: I think how interrupts are handled needs to be revisited eventually
+        let lsb = self.cpu_state.program_counter as u8;
+        let msb = (self.cpu_state.program_counter >> 8) as u8;
+        let mut status = self.cpu_state.status;
+        // Push BRK flag depending on interrupt type
+        status.set(CpuStatus::BRK, interrupt.is_set_b_flag);
+
+        self.push_to_stack(msb);
+        self.push_to_stack(lsb);
+        self.push_to_stack(status.bits());
+
+        // Set INT_DISABLE flag depending on interrupt type
+        self.cpu_state
+            .status
+            .set(CpuStatus::INT_DISABLE, interrupt.is_hardware_interrupt);
+        self.cpu_state.program_counter = self.as_bus().read_two_bytes(interrupt.vector);
+    }
 }
 
 impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
@@ -80,9 +100,20 @@ impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
         CpuBus::new(cpu_state, ppu_state, controller, rom)
     }
 
+    fn as_ppu_action(&mut self) -> PpuAction {
+        let Self {
+            cpu_state: _,
+            ppu_state,
+            controller: _,
+            rom,
+        } = self;
+        PpuAction::new(ppu_state, rom)
+    }
+
     fn increment_cycle_counters(&mut self, cycles: u8) {
         self.cpu_state.cycle_counter += cycles as usize;
-        self.ppu_state.cycle_counter += 3 * cycles as usize;
+        self.as_ppu_action()
+            .increment_cycle_counter(3 * cycles as usize);
     }
 
     fn push_to_stack(&mut self, value: u8) {
@@ -123,24 +154,6 @@ impl<'a, 'b, 'c, 'd> CpuAction<'a, 'b, 'c, 'd> {
         } else {
             self.cpu_state.status.remove(CpuStatus::CARRY);
         }
-    }
-    fn execute_interrupt(&mut self, interrupt: Interrupt) {
-        // TODO: I think how interrupts are handled needs to be revisited eventually
-        let lsb = self.cpu_state.program_counter as u8;
-        let msb = (self.cpu_state.program_counter >> 8) as u8;
-        let mut status = self.cpu_state.status;
-        // Push BRK flag depending on interrupt type
-        status.set(CpuStatus::BRK, interrupt.is_set_b_flag);
-
-        self.push_to_stack(msb);
-        self.push_to_stack(lsb);
-        self.push_to_stack(status.bits());
-
-        // Set INT_DISABLE flag depending on interrupt type
-        self.cpu_state
-            .status
-            .set(CpuStatus::INT_DISABLE, interrupt.is_hardware_interrupt);
-        self.cpu_state.program_counter = self.as_bus().read_two_bytes(interrupt.vector);
     }
 
     fn compute_extra_cycles(&self, opcode: &Opcode, addressing_mode: &AddressingMode) -> u8 {

@@ -3,6 +3,7 @@ use crate::cpu::{CpuAction, CpuBus, CpuState, Instruction};
 // use crate::ppu::ppu_state::PpuState;
 use crate::ppu::{PpuAction, PpuState};
 use crate::rom::ROM;
+use crate::screen::frame::{Frame};
 
 pub trait NES {
     // pub fn next_cpu_cycle();
@@ -28,6 +29,9 @@ pub trait NES {
 
     // Look into PPU state
     fn peek_ppu_state(&self) -> PpuState;
+
+    // Creates a frame using the current PPU state
+    fn render_frame(&self) -> Frame;
 }
 
 #[derive(Debug, Default, Clone)]
@@ -45,7 +49,7 @@ impl ActionNES {
     }
 
     // TODO: may want to revisit how this is done? Maybe implement From?
-    fn as_cpu_action(&mut self) -> CpuAction {
+    pub fn as_cpu_action(&mut self) -> CpuAction {
         CpuAction::new(
             &mut self.cpu_state,
             &mut self.ppu_state,
@@ -75,22 +79,17 @@ impl NES for ActionNES {
     // Updates state to after next CPU instruction
     fn next_cpu_instruction(&mut self) -> Result<Instruction, String> {
         let instruction = self.as_cpu_action().next_cpu_instruction()?;
-        self.as_ppu_action().update_ppu_and_check_for_new_frame();
         Ok(instruction)
     }
 
     // Updates state to after next PPU cycle (next frame)
     fn next_ppu_frame(&mut self) -> Result<(), String> {
-        // TODO: need to run CPU instructions until we're at the next frame
-        // Some Rust while loop black magic
-        // let mut count = 1;
-        let _instruction = self.as_cpu_action().next_cpu_instruction()?;
-        while !self.as_ppu_action().update_ppu_and_check_for_new_frame() {
-            let _instruction = self.as_cpu_action().next_cpu_instruction()?;
-            // count += 1;
-        }
-        // println!("Executed {} instructions", count);
-        // println!("PPU State: {} {}", self.ppu_state.cycle_counter, self.ppu_state.cur_scanline);
+        while {
+            let prev_nmi = self.ppu_state.nmi_interrupt_poll.is_some();
+            self.as_cpu_action().next_cpu_instruction()?;
+            let after_nmi = self.ppu_state.nmi_interrupt_poll.is_some();
+            !(!prev_nmi && after_nmi)
+        } {}
         Ok(())
     }
 
@@ -126,5 +125,12 @@ impl NES for ActionNES {
     // Look into PPU state
     fn peek_ppu_state(&self) -> PpuState {
         self.ppu_state
+    }
+
+    // TODO: first few rendered lines are usually invisible, maybe implement that?
+    fn render_frame(&self) -> Frame {
+        let mut frame = Frame::default();
+        frame.render(&self.ppu_state, &self.rom);
+        frame
     }
 }

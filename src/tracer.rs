@@ -1,21 +1,35 @@
+use log::debug;
+use std::collections::VecDeque;
+
 use crate::{
     cpu::{AddressingMode, CpuBus, CpuState, Instruction, InstructionMetaData, Param},
     nes::{ActionNES, NES},
     ppu::PpuState,
+    screen::frame::Frame,
 };
 
-type ProgramTrace = Vec<String>;
+type ProgramTrace = VecDeque<String>;
 
-// TODO: Make this implement NES
-#[derive(Default)]
 pub struct TraceNes {
     nes: ActionNES,
     pub program_trace: ProgramTrace,
+
+    trace_length: usize,
+}
+
+impl Default for TraceNes {
+    fn default() -> Self {
+        Self::new(10000)
+    }
 }
 
 impl TraceNes {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(trace_length: usize) -> Self {
+        TraceNes {
+            nes: Default::default(),
+            program_trace: Default::default(),
+            trace_length,
+        }
     }
 
     /// NOTE: this is only used for testing, because the nestest has a unique set up, not sure why
@@ -29,21 +43,10 @@ impl TraceNes {
         self
     }
 
-    pub fn next_cpu_instruction(&mut self) -> Result<Instruction, String> {
-        let prev_nes = self.nes.clone();
-        let instruction = self.nes.next_cpu_instruction()?;
-        Self::log_trace(&mut self.program_trace, &instruction, prev_nes)?;
-        Ok(instruction)
-    }
-
     /* TODO: this is all spaghetti, need to change this. Maybe move program_trace out of ActionNES
      * and write a wrapper that logs stuff. The logging logic should not be here!
      */
-    fn log_trace(
-        log: &mut Vec<String>,
-        instruction: &Instruction,
-        nes: ActionNES,
-    ) -> Result<(), String> {
+    fn log_trace(&mut self, instruction: &Instruction, nes: ActionNES) -> Result<(), String> {
         let ActionNES {
             cpu_state: mut original_cpu_state,
             ppu_state: mut original_ppu_state,
@@ -264,7 +267,69 @@ impl TraceNes {
         )
         .to_ascii_uppercase();
 
-        log.push(trace);
+        debug!("{}", &trace);
+        self.push_to_trace(trace);
+
         Ok(())
+    }
+
+    fn push_to_trace(&mut self, trace_line: String) {
+        if self.program_trace.is_empty() {
+            return;
+        }
+        if self.program_trace.len() > self.trace_length {
+            self.program_trace.pop_front();
+        }
+        self.program_trace.push_back(trace_line);
+    }
+}
+
+impl NES for TraceNes {
+    fn next_cpu_instruction(&mut self) -> Result<Instruction, String> {
+        let prev_nes = self.nes.clone();
+        let instruction = self.nes.next_cpu_instruction()?;
+        self.log_trace(&instruction, prev_nes)?;
+        Ok(instruction)
+    }
+
+    fn next_ppu_frame(&mut self) -> Result<(), String> {
+        // self.nes.next_ppu_frame()
+        while {
+            let prev_nes = self.nes.clone();
+            let prev_nmi = self.nes.ppu_state.nmi_interrupt_poll.is_some();
+            let instruction = self.nes.as_cpu_action().next_cpu_instruction()?;
+            let after_nmi = self.nes.ppu_state.nmi_interrupt_poll.is_some();
+            self.log_trace(&instruction, prev_nes)?;
+            !(!prev_nmi && after_nmi)
+        } {}
+        Ok(())
+    }
+
+    fn update_controller(&mut self, key: crate::controller::ControllerState, bit: bool) {
+        self.nes.update_controller(key, bit)
+    }
+
+    fn set_rom(&mut self, rom: crate::rom::ROM) -> Result<(), String> {
+        self.nes.set_rom(rom)
+    }
+
+    fn load_from_path(&mut self, path: &str) -> Result<(), String> {
+        self.nes.load_from_path(path)
+    }
+
+    fn reset(&mut self) -> Result<(), String> {
+        self.nes.reset()
+    }
+
+    fn peek_cpu_state(&self) -> CpuState {
+        self.nes.peek_cpu_state()
+    }
+
+    fn peek_ppu_state(&self) -> PpuState {
+        self.nes.peek_ppu_state()
+    }
+
+    fn render_frame(&self) -> Frame {
+        self.nes.render_frame()
     }
 }

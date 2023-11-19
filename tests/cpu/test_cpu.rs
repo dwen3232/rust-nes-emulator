@@ -2,6 +2,7 @@ use std::fs::{read_to_string, remove_file, OpenOptions};
 use std::io::Write;
 
 use rust_nes_emulator::cpu::Opcode;
+use rust_nes_emulator::nes::NES;
 use rust_nes_emulator::tracer::TraceNes;
 
 #[test]
@@ -18,7 +19,7 @@ fn test_cpu_official_opcodes_nestest() {
         .unwrap();
 
     println!("Creating ActionNES");
-    let mut nes = TraceNes::new().setup();
+    let mut nes = TraceNes::default().setup();
     println!("Loading from path");
     for _ in 0..5002 {
         let instruction = nes
@@ -27,7 +28,7 @@ fn test_cpu_official_opcodes_nestest() {
         if instruction.opcode == Opcode::BRK {
             break;
         }
-        if let Some(s) = nes.program_trace.last() {
+        if let Some(s) = nes.program_trace.back() {
             writeln!(f, "{}", s).expect("Couldn't write line");
         }
     }
@@ -62,7 +63,7 @@ fn test_cpu_official_opcodes_nestest_cycles() {
         .unwrap();
 
     println!("Creating ActionNES");
-    let mut nes = TraceNes::new().setup();
+    let mut nes = TraceNes::default().setup();
     println!("Loading from path");
     for _ in 0..5002 {
         let instruction = nes
@@ -71,7 +72,7 @@ fn test_cpu_official_opcodes_nestest_cycles() {
         if instruction.opcode == Opcode::BRK {
             break;
         }
-        if let Some(s) = nes.program_trace.last() {
+        if let Some(s) = nes.program_trace.back() {
             writeln!(f, "{}", s).expect("Couldn't write line");
         }
     }

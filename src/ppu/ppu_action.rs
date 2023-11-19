@@ -16,11 +16,16 @@ impl<'a, 'b> PpuAction<'a, 'b> {
         PpuBus::new(self.ppu_state, self.rom)
     }
 
+    pub fn increment_cycle_counter(&mut self, cycles: usize) {
+        self.ppu_state.cycle_counter += cycles;
+        self.update();
+    }
+
     // Blatant violation of SRP, but easiest way to do this atm
     // Return true if on new frame
-    pub fn update_ppu_and_check_for_new_frame(&mut self) -> bool {
+    pub fn update(&mut self) {
         if self.ppu_state.cycle_counter < 341 {
-            return false;
+            return
         }
         if self.is_sprite_zero_hit() {
             // sprite zero hit flag is reset on vblank
@@ -40,9 +45,7 @@ impl<'a, 'b> PpuAction<'a, 'b> {
             self.ppu_state.nmi_interrupt_poll = None;
             self.ppu_state.ppustatus.set_vblank_started(false);
             self.ppu_state.ppustatus.set_sprite_zero_hit(false);
-            return true;
         }
-        false
     }
 
     pub fn write_ppuctrl(&mut self, data: u8) {

@@ -1,23 +1,26 @@
 use std::collections::HashMap;
+use std::time::Duration;
+use std::time::Instant;
 
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 
 use sdl2::pixels::PixelFormatEnum;
 
-use crate::nes::ActionNES;
+
 use crate::nes::NES;
 
 use crate::controller::ControllerState;
 
-use self::frame::Frame;
+
 
 pub mod frame;
 pub mod palette;
 
+
 // Make this function runnable with an NES object as an input
 #[allow(unused)]
-pub fn run(path: &str) {
+pub fn run(mut nes: impl NES) {
     // Initialize sdl display
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
@@ -46,22 +49,17 @@ pub fn run(path: &str) {
     key_map.insert(Keycode::Left, ControllerState::LEFT);
     key_map.insert(Keycode::Right, ControllerState::RIGHT);
     // Create a frame
-    let mut frame = Frame::new();
-    let mut nes = ActionNES::new();
-    nes.load_from_path(path);
-    nes.reset();
 
+    let target_frame_rate = 45;
+    let target_frame_duration = Duration::from_secs_f64(1.0 / target_frame_rate as f64);
     loop {
+        let frame_start = Instant::now();
+
         // 1. Execute until next frame
         nes.next_ppu_frame();
 
-        // 2. Update the display
-        frame.render(&nes.ppu_state, &nes.rom);
-        texture.update(None, frame.as_bytes_ref(), 256 * 3);
-        canvas.copy(&texture, None, None);
-        canvas.present();
-
-        // 3. Read user input
+        
+        // 2. Read user input
         for event in event_pump.poll_iter() {
             match event {
                 Event::Quit { .. }
@@ -83,6 +81,18 @@ pub fn run(path: &str) {
                 }
                 _ => {}
             }
+        }
+
+        // 3. Update the display
+        let frame = nes.render_frame();
+        texture.update(None, frame.as_bytes_ref(), 256 * 3);
+        canvas.copy(&texture, None, None);
+        canvas.present();
+
+        // 4. Sleep  to enforce frame rate
+        let frame_duration = frame_start.elapsed();
+        if frame_duration < target_frame_duration {
+            std::thread::sleep(target_frame_duration - frame_duration);
         }
     }
 }

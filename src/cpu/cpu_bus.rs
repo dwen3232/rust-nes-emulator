@@ -167,8 +167,18 @@ impl<'a, 'b, 'c, 'd> CpuBus<'a, 'b, 'c, 'd> {
         match index {
             RAM_START..=RAM_END => self.cpu_state.ram[(index & RAM_MASK) as usize],
             PPU_REG_START..=PPU_REG_END => {
-                let _masked_index = index & PPU_MASK;
-                panic!("Invalid PPU_REG index")
+                let masked_index = index & PPU_MASK;
+                match masked_index {
+                    0 => self.ppu_state.ppuctrl.bits(),
+                    1 => self.ppu_state.ppumask.bits(),
+                    2 => self.ppu_state.ppustatus.bits(),
+                    3 => self.ppu_state.oamaddr.data,
+                    4 => 0,
+                    5 => 0,
+                    6 => 0,
+                    7 => self.ppu_state.ppudata,
+                    _ => panic!("Invalid PPU_REG index"),
+                }
             }
             0x4016 => self.controller.peek(),
             APUIO_START..=APUIO_END => {

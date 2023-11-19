@@ -239,7 +239,7 @@ impl PpuStatus {
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct OamAddr {
-    data: u8,
+    pub data: u8,
 }
 
 impl OamAddr {
@@ -262,8 +262,8 @@ impl OamAddr {
 
 #[derive(Debug, Clone, Copy)]
 pub struct PpuScroll {
-    cam_position_x: u8,
-    cam_position_y: u8,
+    pub cam_position_x: u8,
+    pub cam_position_y: u8,
     is_set_position_x: bool,
 }
 
@@ -293,9 +293,9 @@ impl PpuScroll {
         self.is_set_position_x = !self.is_set_position_x; // flip the bool
     }
 
-    pub fn read(&self) -> (u8, u8) {
-        // Returns (cam_position_x, cam_position_y)
-        todo!()
+    /// Returns (cam_position_x, cam_position_y)
+    pub fn read(&self) -> (usize, usize) {
+        (self.cam_position_x as usize, self.cam_position_y as usize)
     }
 
     pub fn reset(&mut self) {
@@ -305,7 +305,7 @@ impl PpuScroll {
 
 #[derive(Debug, Clone, Copy)]
 pub struct PpuAddr {
-    data: (u8, u8),
+    pub data: (u8, u8),
     is_set_msb: bool,
 }
 
